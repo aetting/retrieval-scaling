@@ -11,7 +11,7 @@ import transformers
 
 
 ############################## Training ##############################
-def fast_load_jsonl_shard(args, shard_index):
+def fast_load_jsonl_shard(args, all_file_paths,rank,shard_index):
     """
     This function is designed to handle large datasets by only loading the specific portion of data (shard) that 
     corresponds to the given shard index.
@@ -26,7 +26,7 @@ def fast_load_jsonl_shard(args, shard_index):
     min_chunk_sz = args.get('min_chunk_sz', 0)
     keep_last = args.get('keep_last_chunk', True)
 
-    passage_shard_save_path = os.path.join(args.passages_dir, f'raw_passages-{shard_index}-of-{num_shards}.pkl')
+    passage_shard_save_path = os.path.join(args.passages_dir, f'raw_passages_{rank}-{shard_index}-of-{num_shards}.pkl')
     
     if os.path.exists(passage_shard_save_path):
         logging.info(f'Loading from {passage_shard_save_path}...')
@@ -38,17 +38,18 @@ def fast_load_jsonl_shard(args, shard_index):
         logging.info(f"{raw_data_path} does not exist")
         return
 
-    if os.path.isdir(raw_data_path):
-        all_file_paths = [os.path.join(raw_data_path, file) for file in os.listdir(raw_data_path)]
-    else:
-        all_file_paths = [raw_data_path]
+    # if os.path.isdir(raw_data_path):
+    #     all_file_paths = [os.path.join(raw_data_path, file) for file in os.listdir(raw_data_path)]
+    # else:
+    #     all_file_paths = [raw_data_path]
     
     file_sizes = []
     for file in all_file_paths:
-        if os.path.isdir(raw_data_path):
-            file_path = os.path.join(raw_data_path, file)
-        else:
-            file_path =  file
+        # if os.path.isdir(raw_data_path):
+        #     file_path = os.path.join(raw_data_path, file)
+        # else:
+        #     file_path =  file
+        file_path = file
         file_sizes.append(os.path.getsize(file_path))
     total_size = sum(file_sizes)
 
