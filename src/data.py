@@ -11,7 +11,7 @@ import transformers
 
 
 ############################## Training ##############################
-def fast_load_jsonl_shard(args, all_file_paths,rank,shard_index):
+def fast_load_jsonl_shard(args,all_file_paths,rank,shard_index):
     """
     This function is designed to handle large datasets by only loading the specific portion of data (shard) that 
     corresponds to the given shard index.
@@ -45,6 +45,7 @@ def fast_load_jsonl_shard(args, all_file_paths,rank,shard_index):
     
     file_sizes = []
     for file in all_file_paths:
+        print(file)
         # if os.path.isdir(raw_data_path):
         #     file_path = os.path.join(raw_data_path, file)
         # else:
@@ -83,12 +84,15 @@ def fast_load_jsonl_shard(args, all_file_paths,rank,shard_index):
                     ex = json.loads(line)
                     chunks = split_data_into_chunks(ex['text'].strip(), chunk_sz, min_chunk_sz, keep_last)
                     for chunk in chunks:
-                        passages.append({
+                        pass_dict = {
                             "text": chunk,
                             "id": idx,
                             "shard_id": shard_index,
                             "num_shards": num_shards,
-                        })
+                        }
+                        for added_field in args.fields_to_add:
+                            pass_dict[added_field] = ex[added_field]
+                        passages.append(pass_dict)
                         idx += 1
                 else:
                     break
@@ -98,6 +102,29 @@ def fast_load_jsonl_shard(args, all_file_paths,rank,shard_index):
         with open(passage_shard_save_path, 'wb') as file:
             pickle.dump(passages, file)
 
+    return passages
+
+def fast_load_jsonl(passage_save_path):
+    """
+    This function is designed to handle large datasets by only loading the specific portion of data (shard) that 
+    corresponds to the given shard index.
+
+    Shards are determined by dividing the total size of all files in the directory evenly by `num_shards`. 
+    This function reads only the data portion of the `shard_index` shard, chunks the text from each line 
+    based on `chunk_sz`, and appends each chunk to a list with an incremental ID.
+    """
+    # raw_data_path = args.raw_data_path
+    # num_shards = args.num_shards
+    # chunk_sz = args.chunk_size
+    # min_chunk_sz = args.get('min_chunk_sz', 0)
+    # keep_last = args.get('keep_last_chunk', True)
+
+    # passage_shard_save_path = os.path.join(args.passages_dir, f'raw_passages_{rank}-{shard_index}-of-{num_shards}.pkl')
+    
+    # if os.path.exists(passage_shard_save_path):
+    logging.info(f'Loading from {passage_save_path}...')
+    with open(passage_save_path, 'rb') as file:
+        passages = pickle.load(file)
     return passages
 
 # Used for passage retrieval (old, inefficient bc it needs load the whole data)
@@ -224,12 +251,25 @@ def load_eval_data(cfg):
     elif task_name == 'mmlu':
         # (test case) prepare mmlu for instruct-eval
         data = prepare_mmlu_eval_data(data)
+
+    elif task_name == 'gen':
+        prepare_gen_eval_data(data)
     
     else:
         raise AttributeError
 
     return data
 
+
+def prepare_gen_eval_data(data):
+    """
+    Use the question as the query. (0-shot)
+    """
+    new_data = []
+    for ex in data:
+        ex.update({'raw_query': ex['text']})
+        new_data.append(ex)
+    return new_data
 
 def prepare_lm_eval_data(data):
     """

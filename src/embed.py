@@ -129,19 +129,27 @@ def generate_passage_embeddings(cfg):
         
         shard_ids = [int(i) for i in args.shard_ids]
 
-        if os.path.isdir(raw_data_path):
-            source_paths = [os.path.join(raw_data_path, file) for file in os.listdir(raw_data_path)]
+        if os.path.isdir(args.raw_data_path):
+            source_paths = [os.path.join(args.raw_data_path, file) for file in os.listdir(args.raw_data_path)]
         else:
-            source_paths = [raw_data_path]
+            source_paths = [args.raw_data_path]
 
-        rank = os.environ.get("BEAKER_REPLICA_RANK")
-        world_size = os.environ.get("BEAKER_REPLICA_COUNT")
+        print(source_paths)
+        rank = int(os.environ.get("BEAKER_REPLICA_RANK"))
+        world_size = int(os.environ.get("BEAKER_REPLICA_COUNT"))
         # Distribute files across processes
         files_per_process = len(source_paths) / world_size
         start_idx = int(rank * files_per_process)
-        end_idx = int((rank + 1) * files_per_process) if rank < world_size - 1 else len(all_file_paths)
+        end_idx = int((rank + 1) * files_per_process) if rank < world_size - 1 else len(source_paths)
         partition_source_paths = source_paths[start_idx:end_idx]
         # partition_destination_paths = destination_paths[start_idx:end_idx]
+
+        print(f"This worker (rank {rank}) handling files:\n {partition_source_paths[0]}\n to\n {partition_source_paths[-1]}")
+
+        #TODO
+        #for simplicity maybe just
+        #num_shards = len(source_paths)/2
+        #shard_ids = range(num_shards)
 
         for shard_id in shard_ids:
             embedding_shard_save_path = os.path.join(args.embedding_dir, args.prefix + f"{rank}_{shard_id:02d}.pkl")
@@ -150,7 +158,10 @@ def generate_passage_embeddings(cfg):
                 print(f"Embeddings exist in {embedding_shard_save_path}")
                 continue
             
+            print(partition_source_paths)
             shard_passages = fast_load_jsonl_shard(args, partition_source_paths, rank, shard_id)
+            for passage in shard_passages:
+                print(passage)
 
             allids, allembeddings = embed_passages(args, shard_passages, model, tokenizer)
 

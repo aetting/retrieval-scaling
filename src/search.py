@@ -124,8 +124,9 @@ def add_passages(data, passages, top_passages_and_scores, valid_query_idx, domai
             next_docs = [passages[str(int(doc_id)+1)] if int(doc_id)+1 < len(passages) else passages[doc_id] for doc_id in results_and_scores[0]]
             scores = [str(score) for score in results_and_scores[1]]
             ctxs_num = len(docs)
-            d["ctxs"] = [
-                {
+            d["ctxs"] = []
+            for c in range(ctxs_num):
+                item_dict = {
                     "id": results_and_scores[0][c],
                     "source": domain,
                     # "retrieval title": docs[c]["title"],
@@ -133,8 +134,9 @@ def add_passages(data, passages, top_passages_and_scores, valid_query_idx, domai
                     "retrieval next text": next_docs[c]["text"],
                     "retrieval score": scores[c],
                 }
-                for c in range(ctxs_num)
-            ]
+                for added_field in args.fields_to_add:
+                    item_dict[added_field] = docs[c][added_field]
+                d["ctxs"].append(item_dict)
             idx += 1
         else:
             d["ctxs"] = [None]
@@ -147,9 +149,12 @@ def add_hasanswer(data, hasanswer):
             d["hasanswer"] = hasanswer[i][k]
 
 
-def get_search_output_path(cfg, index_shard_ids):
+def get_search_output_path(cfg, rank, index_shard_ids):
     eval_args = cfg.evaluation
-    shards_postfix = '_'.join([str(shard_id) for shard_id in index_shard_ids])
+    if index_shard_ids == [-1]:
+        shards_postfix = "all_shards"
+    else:
+        shards_postfix = str(rank) + "-" + '_'.join([str(shard_id) for shard_id in index_shard_ids])
     output_dir = os.path.join(eval_args.eval_output_dir, shards_postfix)
     output_path = os.path.join(output_dir, os.path.basename(eval_args.data.eval_data).replace('.jsonl', '_retrieved_results.jsonl'))
     return output_path
@@ -167,8 +172,9 @@ def get_merged_search_output_path(cfg):
         index_shard_ids_list = [index_args.index_shard_ids]
     
     merged_postfix = ''
-    for index_shard_ids in sorted(index_shard_ids_list, key=lambda x: int(x[0])):
-        shards_postfix = '_'.join([str(shard_id) for shard_id in index_shard_ids])
+    # for index_shard_ids in sorted(index_shard_ids_list, key=lambda x: int(x[0])):
+    for rank,index_shard_ids in enumerate(index_shard_ids_list):
+        shards_postfix = str(rank) + "-" + '_'.join([str(shard_id) for shard_id in index_shard_ids])
         merged_postfix += '-' + shards_postfix
     merged_postfix = merged_postfix.strip('-')
 
@@ -217,9 +223,9 @@ def search_dense_topk(cfg):
         index_shard_ids_list = [index_args.index_shard_ids]
 
     all_exist = True
-    for index_shard_ids in index_shard_ids_list:
+    for rank, index_shard_ids in enumerate(index_shard_ids_list):
         # check if all search results exist
-        output_path = get_search_output_path(cfg, index_shard_ids)
+        output_path = get_search_output_path(cfg, rank, index_shard_ids)
         all_exist = all_exist and os.path.exists(output_path)
     
     if all_exist and not eval_args.search.overwrite:
@@ -249,6 +255,7 @@ def search_dense_topk(cfg):
         
         # load eval data
         data = load_eval_data(cfg)
+        print(data)
         
         # if eval_args.data.num_eval_samples is not None:
         #     random.seed(eval_args.data.seed)
@@ -273,8 +280,8 @@ def search_dense_topk(cfg):
             return
 
         # load index
-        for index_shard_ids in index_shard_ids_list:
-            output_path = get_search_output_path(cfg, index_shard_ids)
+        for rank, index_shard_ids in enumerate(index_shard_ids_list):
+            output_path = get_search_output_path(cfg, rank, index_shard_ids)
             
             if os.path.exists(output_path) and not eval_args.search.overwrite:
                 logging.info(f'{output_path} exists, skipping searching.')
@@ -282,12 +289,12 @@ def search_dense_topk(cfg):
             else:
                 copied_data = copy.deepcopy(data)
 
-                index_dir, _ = get_index_dir_and_passage_paths(cfg, index_shard_ids)
+                index_dir, _ = get_index_dir_and_passage_paths(cfg, rank, index_shard_ids)
                 index = Indexer(index_args.projection_size, index_args.n_subquantizers, index_args.n_bits)
                 index.deserialize_from(index_dir)
 
                 # load passages and id mapping corresponding to the index
-                passages, passage_id_map = get_index_passages_and_id_map(cfg, index_shard_ids)
+                passages, passage_id_map = get_index_passages_and_id_map(cfg, rank, index_shard_ids)
                 assert len(passages) == index.index.ntotal, f"number of documents {len(passages)} and number of embeddings {index.index.ntotal} mismatch"
 
                 # get top k results
@@ -329,7 +336,7 @@ def post_hoc_merge_topk(cfg):
     
     merged_data = []
     for i, index_shard_ids in enumerate(index_shard_ids_list):
-        path_to_merge = get_search_output_path(cfg, index_shard_ids)
+        path_to_merge = get_search_output_path(cfg, i, index_shard_ids)
         print(f"Adding {path_to_merge}")
         
         data_to_merge = []
