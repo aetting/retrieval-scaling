@@ -9,6 +9,9 @@ import pdb
 import numpy as np
 import transformers
 
+import boto3
+import smart_open
+
 
 ############################## Training ##############################
 def fast_load_jsonl_shard(args,file_paths,rank,shard_index, shard_size,num_shards):
@@ -77,6 +80,7 @@ def fast_load_jsonl_shard(args,file_paths,rank,shard_index, shard_size,num_shard
     passages = []
     idx = 0
     for file_path, start_in_file, end_in_file in shard_files:
+        # with smart_open.open(f"s3://{bucket}/{okey}") as f:
         with open(file_path, 'r', encoding='utf-8') as file:
             file.seek(int(start_in_file))
             # Skip the rest of the partial line after seeking, if not at the start of the file

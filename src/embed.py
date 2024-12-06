@@ -1,4 +1,5 @@
 import os
+import re
 
 import argparse
 import csv
@@ -10,6 +11,9 @@ from tqdm import tqdm
 import numpy as np
 import torch
 import math
+
+import boto3
+import smart_open
 
 from transformers import AutoTokenizer, AutoModel
 from sentence_transformers import SentenceTransformer
@@ -123,6 +127,29 @@ def get_shard_specs(args, file_paths):
 
     return num_shards,shard_size
 
+def get_filepaths(args):
+    if "s3://" in args.raw_data_path:
+        client = boto3.client('s3')
+        m = re.match("s3://([^/]+)/(.*)",args.raw_data_path)
+        bucket, filedir = m.groups()[0],m.groups()[1]
+        # filedir = f"pretraining-data/sources/reddit/dolma_raw/merged_versions/merged_qa_all_wsubreddit/{subdir}/"
+        paginator = client.get_paginator('list_objects_v2')
+        pages = paginator.paginate(Bucket=bucket, Prefix=filedir)
+
+        source_paths = []
+        for page in pages:
+            for obj in page["Contents"]:
+                okey = obj["Key"]
+                if "jsonl" not in okey:
+                    continue
+                filepath = f"s3://{bucket}/{okey}"
+                source_paths.append(filepath)
+
+    else:
+        source_paths = [os.path.join(args.raw_data_path, file) for file in os.listdir(args.raw_data_path)]
+
+    return source_paths
+
 
 def generate_passage_embeddings(cfg):
     if cfg.model.get("sparse_retriever", None):
@@ -154,11 +181,13 @@ def generate_passage_embeddings(cfg):
         if not args.no_fp16:
             model = model.half()
         
-        if os.path.isdir(args.raw_data_path):
-            source_paths = [os.path.join(args.raw_data_path, file) for file in os.listdir(args.raw_data_path)]
-        else:
-            source_paths = [args.raw_data_path]
+        # if os.path.isdir(args.raw_data_path):
+        #     source_paths = [os.path.join(args.raw_data_path, file) for file in os.listdir(args.raw_data_path)]
+        # else:
+        #     source_paths = [args.raw_data_path]
 
+        source_paths = get_filepaths(args)
+        print(source_paths)
 
         rank = int(os.environ.get("BEAKER_REPLICA_RANK"))
         world_size = int(os.environ.get("BEAKER_REPLICA_COUNT"))
