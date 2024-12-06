@@ -28,11 +28,11 @@ datastore:
   
   embedding:
     raw_data_path: ${datastore.raw_data_path}
-    shard_ids: [0,1,2,3]
-    num_shards: 4
+    # num_shards: 4
     chunk_size: ${datastore.chunk_size}
     keep_last_chunk: true
-    passages_dir: /net/nfs.cirrascale/allennlp/allysone/reddit/scaling_out_mini/passages/${datastore.domain}/${datastore.embedding.num_shards}-shards
+    passages_dir: /net/nfs.cirrascale/allennlp/allysone/reddit/scaling_out_mini/passages/${datastore.domain}
+    max_shard_size: 1000000000
 
     per_gpu_batch_size: 512
     passage_maxlength: ${datastore.chunk_size}  # need to set to a larger num than chunk size
@@ -42,18 +42,19 @@ datastore:
     no_title: False
     lowercase: False
     normalize_text: False
+    fields_to_add: ["subreddit"]
+
 
     prefix: "passages"
-    embedding_dir: /net/nfs.cirrascale/allennlp/allysone/reddit/scaling_out_mini/embeddings/${model.datastore_encoder}/${datastore.domain}/${datastore.embedding.num_shards}-shards
+    embedding_dir: /net/nfs.cirrascale/allennlp/allysone/reddit/scaling_out_mini/embeddings/${model.datastore_encoder}/${datastore.domain}
     use_saved_if_exists: true
-    fields_to_add: ["subreddit"]
 
   index:
     raw_data_path: ${datastore.raw_data_path}
     chunk_size: ${datastore.chunk_size}
     passages_embeddings: ${datastore.embedding.embedding_dir}/*.pkl
     num_subsampled_embedding_files: -1    # Number of subsampled embeddings, use all if pass -1, not supported yet, assume use all embeddings in the dir
-    index_shard_ids: [-1]  # idx of passages included in each index; [0, 1, 2] means build a single index over psg-0&1&2; [[0], [1,2]] means build 1 index for psg-0 and 1 index for psg-1&2.
+    # index_shard_ids: [-1]  # idx of passages included in each index; [0, 1, 2] means build a single index over psg-0&1&2; [[0], [1,2]] means build 1 index for psg-0 and 1 index for psg-1&2.
     save_or_load_index: True
     no_fp16: False
     index_type: PQ    # PQ, PQIVF (PQ degrades to flat when n_subquantizers is 0)
@@ -73,8 +74,8 @@ evaluation:
     lowercase: False
     normalize_text: False
     overwrite: true    # Overwrite the search results if exist
-    merge_multi_index_results: true  # Merge the searched results by multiple shards (same source)
-    merge_multi_source_results: false  # Merge the searched results by multiple sources
+    # merge_multi_index_results: true  # Merge the searched results by multiple shards (same source)
+    # merge_multi_source_results: false  # Merge the searched results by multiple sources
     paths_to_merge: null  # provide a txt file where each line is a file with searched results to merge when merge_multi_source_results is set to True
     merged_path: null  # path to save the multi-source merged results
     topk_subsample_p: 1  # subsample from the top-k with coin flipping with prob p if p < 1
@@ -93,7 +94,7 @@ evaluation:
   concate_k: 3    # Number of retrieved passages for concatenation, 0 means LM-only
   max_retrieval_len: 1024
   calibration_out_dir: null
-  eval_output_dir: /net/nfs.cirrascale/allennlp/allysone/reddit/scaling_out_mini/retrieved_results/${model.datastore_encoder}/${datastore.domain}_datastore-${datastore.chunk_size}_chunk_size-1of${datastore.embedding.num_shards}_shards/top_${evaluation.search.n_docs}
+  eval_output_dir: /net/nfs.cirrascale/allennlp/allysone/reddit/scaling_out_mini/retrieved_results/${model.datastore_encoder}/${datastore.domain}_datastore-${datastore.chunk_size}_chunk_size/top_${evaluation.search.n_docs}
   results_only_log_file: scaling_out/test_c4_ppl.log
   debug_mode: false
   decontamination: false

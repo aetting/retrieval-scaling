@@ -11,7 +11,7 @@ import transformers
 
 
 ############################## Training ##############################
-def fast_load_jsonl_shard(args,all_file_paths,rank,shard_index):
+def fast_load_jsonl_shard(args,file_paths,rank,shard_index, shard_size,num_shards):
     """
     This function is designed to handle large datasets by only loading the specific portion of data (shard) that 
     corresponds to the given shard index.
@@ -21,7 +21,7 @@ def fast_load_jsonl_shard(args,all_file_paths,rank,shard_index):
     based on `chunk_sz`, and appends each chunk to a list with an incremental ID.
     """
     raw_data_path = args.raw_data_path
-    num_shards = args.num_shards
+    # num_shards = args.num_shards if args.num_shards else None
     chunk_sz = args.chunk_size
     min_chunk_sz = args.get('min_chunk_sz', 0)
     keep_last = args.get('keep_last_chunk', True)
@@ -44,23 +44,28 @@ def fast_load_jsonl_shard(args,all_file_paths,rank,shard_index):
     #     all_file_paths = [raw_data_path]
     
     file_sizes = []
-    for file in all_file_paths:
-        print(file)
+    for file in file_paths:
         # if os.path.isdir(raw_data_path):
         #     file_path = os.path.join(raw_data_path, file)
         # else:
         #     file_path =  file
         file_path = file
         file_sizes.append(os.path.getsize(file_path))
-    total_size = sum(file_sizes)
+    # total_size = sum(file_sizes)
+    # print("SIZE")
+    # print(total_size)
 
-    shard_size = total_size / num_shards
+    # if args.max_shard_size:
+    #     shard_size = args.max_shard_size
+    #     num_shards = total_size/shard_size
+    # elif num_shards:
+    #     shard_size = total_size / num_shards
     shard_start = shard_size * shard_index
     shard_end = shard_start + shard_size if shard_index < shard_size - 1 else total_size
     
     current_pos = 0
     shard_files = []
-    for file_path, file_size in zip(all_file_paths, file_sizes):
+    for file_path, file_size in zip(file_paths, file_sizes):
         next_pos = current_pos + file_size
         if next_pos > shard_start and current_pos < shard_end:
             # This file is part of the i-th shard

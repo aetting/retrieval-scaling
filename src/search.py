@@ -113,7 +113,7 @@ def validate(data, workers_num):
     return match_stats.questions_doc_hits
 
 
-def add_passages(data, passages, top_passages_and_scores, valid_query_idx, domain=None):
+def add_passages(data, passages, top_passages_and_scores, valid_query_idx, embedding_args, domain=None):
     # add passages to original data
     assert len(valid_query_idx) == len(top_passages_and_scores)
     idx = 0
@@ -121,7 +121,7 @@ def add_passages(data, passages, top_passages_and_scores, valid_query_idx, domai
         if i in valid_query_idx:
             results_and_scores = top_passages_and_scores[idx]
             docs = [passages[doc_id] for doc_id in results_and_scores[0]]
-            next_docs = [passages[str(int(doc_id)+1)] if int(doc_id)+1 < len(passages) else passages[doc_id] for doc_id in results_and_scores[0]]
+            # next_docs = [passages[str(int(doc_id)+1)] if int(doc_id)+1 < len(passages) else passages[doc_id] for doc_id in results_and_scores[0]]
             scores = [str(score) for score in results_and_scores[1]]
             ctxs_num = len(docs)
             d["ctxs"] = []
@@ -131,10 +131,10 @@ def add_passages(data, passages, top_passages_and_scores, valid_query_idx, domai
                     "source": domain,
                     # "retrieval title": docs[c]["title"],
                     "retrieval text": docs[c]["text"],
-                    "retrieval next text": next_docs[c]["text"],
+                    # "retrieval next text": next_docs[c]["text"],
                     "retrieval score": scores[c],
                 }
-                for added_field in args.fields_to_add:
+                for added_field in embedding_args.fields_to_add:
                     item_dict[added_field] = docs[c][added_field]
                 d["ctxs"].append(item_dict)
             idx += 1
@@ -149,14 +149,17 @@ def add_hasanswer(data, hasanswer):
             d["hasanswer"] = hasanswer[i][k]
 
 
-def get_search_output_path(cfg, rank, index_shard_ids):
+def get_search_output_path(cfg):
     eval_args = cfg.evaluation
-    if index_shard_ids == [-1]:
-        shards_postfix = "all_shards"
-    else:
-        shards_postfix = str(rank) + "-" + '_'.join([str(shard_id) for shard_id in index_shard_ids])
+    shards_postfix = "all_shards"
     output_dir = os.path.join(eval_args.eval_output_dir, shards_postfix)
     output_path = os.path.join(output_dir, os.path.basename(eval_args.data.eval_data).replace('.jsonl', '_retrieved_results.jsonl'))
+    # if index_shard_ids == [-1]:
+    #     shards_postfix = "all_shards"
+    # else:
+    #     shards_postfix = str(rank) + "-" + '_'.join([str(shard_id) for shard_id in index_shard_ids])
+    # output_dir = os.path.join(eval_args.eval_output_dir, shards_postfix)
+    # output_path = os.path.join(output_dir, os.path.basename(eval_args.data.eval_data).replace('.jsonl', '_retrieved_results.jsonl'))
     return output_path
 
 
@@ -164,12 +167,12 @@ def get_merged_search_output_path(cfg):
     index_args = cfg.datastore.index
     eval_args = cfg.evaluation
 
-    if isinstance(index_args.index_shard_ids[0], ListConfig):
-        print(f"Multi-index mode: building {len(index_args.index_shard_ids)} index for {index_args.index_shard_ids} sequentially...")
-        index_shard_ids_list = index_args.index_shard_ids
-    else:
-        print(f"Single-index mode: building a single index over {index_args.index_shard_ids} shards...")
-        index_shard_ids_list = [index_args.index_shard_ids]
+    # if isinstance(index_args.index_shard_ids[0], ListConfig):
+    #     print(f"Multi-index mode: building {len(index_args.index_shard_ids)} index for {index_args.index_shard_ids} sequentially...")
+    #     index_shard_ids_list = index_args.index_shard_ids
+    # else:
+    #     print(f"Single-index mode: building a single index over {index_args.index_shard_ids} shards...")
+    #     index_shard_ids_list = [index_args.index_shard_ids]
     
     merged_postfix = ''
     # for index_shard_ids in sorted(index_shard_ids_list, key=lambda x: int(x[0])):
@@ -214,22 +217,26 @@ def search_dense_topk(cfg):
     index_args = cfg.datastore.index
     eval_args = cfg.evaluation
     ds_domain = cfg.datastore.domain
+    embedding_args = cfg.datastore.embedding
 
-    if isinstance(index_args.index_shard_ids[0], ListConfig):
-        print(f"Multi-index mode: building {len(index_args.index_shard_ids)} index for {index_args.index_shard_ids} sequentially...")
-        index_shard_ids_list = index_args.index_shard_ids
-    else:
-        print(f"Single-index mode: building a single index over {index_args.index_shard_ids} shards...")
-        index_shard_ids_list = [index_args.index_shard_ids]
+    # if isinstance(index_args.index_shard_ids[0], ListConfig):
+    #     print(f"Multi-index mode: building {len(index_args.index_shard_ids)} index for {index_args.index_shard_ids} sequentially...")
+    #     index_shard_ids_list = index_args.index_shard_ids
+    # else:
+    #     print(f"Single-index mode: building a single index over {index_args.index_shard_ids} shards...")
+    #     index_shard_ids_list = [index_args.index_shard_ids]
 
     all_exist = True
-    for rank, index_shard_ids in enumerate(index_shard_ids_list):
-        # check if all search results exist
-        output_path = get_search_output_path(cfg, rank, index_shard_ids)
-        all_exist = all_exist and os.path.exists(output_path)
+    # for rank, index_shard_ids in enumerate(index_shard_ids_list):
+    #     # check if all search results exist
+    #     output_path = get_search_output_path(cfg, rank, index_shard_ids)
+    #     all_exist = all_exist and os.path.exists(output_path)
+
+    output_path = get_search_output_path(cfg)
+    all_exist = all_exist and os.path.exists(output_path)
     
     if all_exist and not eval_args.search.overwrite:
-        logging.info(f'All search results for {index_args.index_shard_ids} exist, skipping searching.')
+        logging.info(f'Search results exist, skipping searching.')
     
     else:
         # load model and evaluation data
@@ -255,7 +262,6 @@ def search_dense_topk(cfg):
         
         # load eval data
         data = load_eval_data(cfg)
-        print(data)
         
         # if eval_args.data.num_eval_samples is not None:
         #     random.seed(eval_args.data.seed)
@@ -280,41 +286,70 @@ def search_dense_topk(cfg):
             return
 
         # load index
-        for rank, index_shard_ids in enumerate(index_shard_ids_list):
-            output_path = get_search_output_path(cfg, rank, index_shard_ids)
+        # for rank, index_shard_ids in enumerate(index_shard_ids_list):
+        #     output_path = get_search_output_path(cfg, rank, index_shard_ids)
             
-            if os.path.exists(output_path) and not eval_args.search.overwrite:
-                logging.info(f'{output_path} exists, skipping searching.')
+        #     if os.path.exists(output_path) and not eval_args.search.overwrite:
+        #         logging.info(f'{output_path} exists, skipping searching.')
 
-            else:
-                copied_data = copy.deepcopy(data)
+        #     else:
+        #         copied_data = copy.deepcopy(data)
 
-                index_dir, _ = get_index_dir_and_passage_paths(cfg, rank, index_shard_ids)
-                index = Indexer(index_args.projection_size, index_args.n_subquantizers, index_args.n_bits)
-                index.deserialize_from(index_dir)
+        #         index_dir, _ = get_index_dir_and_passage_paths(cfg, rank, index_shard_ids)
+        #         index = Indexer(index_args.projection_size, index_args.n_subquantizers, index_args.n_bits)
+        #         index.deserialize_from(index_dir)
 
-                # load passages and id mapping corresponding to the index
-                passages, passage_id_map = get_index_passages_and_id_map(cfg, rank, index_shard_ids)
-                assert len(passages) == index.index.ntotal, f"number of documents {len(passages)} and number of embeddings {index.index.ntotal} mismatch"
+        #         # load passages and id mapping corresponding to the index
+        #         passages, passage_id_map = get_index_passages_and_id_map(cfg, rank, index_shard_ids)
+        #         assert len(passages) == index.index.ntotal, f"number of documents {len(passages)} and number of embeddings {index.index.ntotal} mismatch"
 
-                # get top k results
-                start_time_retrieval = time.time()
+        #         # get top k results
+        #         start_time_retrieval = time.time()
 
-                top_ids_and_scores = index.search_knn(questions_embedding, eval_args.search.n_docs)
-                logging.info(f"Search time: {time.time()-start_time_retrieval:.1f} s.")
+        #         top_ids_and_scores = index.search_knn(questions_embedding, eval_args.search.n_docs)
+        #         logging.info(f"Search time: {time.time()-start_time_retrieval:.1f} s.")
 
-                # todo: double check valid_query_idx
-                logging.info(f"Adding documents to eval data...")
-                add_passages(copied_data, passage_id_map, top_ids_and_scores, valid_query_idx, domain=ds_domain)
+        #         # todo: double check valid_query_idx
+        #         logging.info(f"Adding documents to eval data...")
+        #         add_passages(copied_data, passage_id_map, top_ids_and_scores, valid_query_idx, embedding_args, domain=ds_domain)
                 
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                safe_write_jsonl(copied_data, output_path)
-    
-    if cfg.evaluation.search.get('merge_multi_source_results', False) and cfg.evaluation.search.get("topk_subsample_p", None):
-        post_hoc_merge_topk_multi_domain(cfg)
+        #         os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        #         safe_write_jsonl(copied_data, output_path)
 
-    elif cfg.evaluation.search.get('merge_multi_index_results', True):
-        post_hoc_merge_topk(cfg)
+        output_path = get_search_output_path(cfg)
+        
+        # if os.path.exists(output_path) and not eval_args.search.overwrite:
+        #     logging.info(f'{output_path} exists, skipping searching.')
+
+        # else:
+        copied_data = copy.deepcopy(data)
+
+        index_dir, _ = get_index_dir_and_passage_paths(cfg)
+        index = Indexer(index_args.projection_size, index_args.n_subquantizers, index_args.n_bits)
+        index.deserialize_from(index_dir)
+
+        # load passages and id mapping corresponding to the index
+        passages, passage_id_map = get_index_passages_and_id_map(cfg)
+        assert len(passages) == index.index.ntotal, f"number of documents {len(passages)} and number of embeddings {index.index.ntotal} mismatch"
+
+        # get top k results
+        start_time_retrieval = time.time()
+
+        top_ids_and_scores = index.search_knn(questions_embedding, eval_args.search.n_docs)
+        logging.info(f"Search time: {time.time()-start_time_retrieval:.1f} s.")
+
+        # todo: double check valid_query_idx
+        logging.info(f"Adding documents to eval data...")
+        add_passages(copied_data, passage_id_map, top_ids_and_scores, valid_query_idx, embedding_args, domain=ds_domain)
+        
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        safe_write_jsonl(copied_data, output_path)
+    
+    # if cfg.evaluation.search.get('merge_multi_source_results', False) and cfg.evaluation.search.get("topk_subsample_p", None):
+    #     post_hoc_merge_topk_multi_domain(cfg)
+
+    # elif cfg.evaluation.search.get('merge_multi_index_results', True):
+    #     post_hoc_merge_topk(cfg)
     
 
 def post_hoc_merge_topk(cfg):

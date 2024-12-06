@@ -292,29 +292,37 @@ def add_embeddings(index, embeddings, ids, indexing_batch_size, id_offset=0):
     return embeddings, ids
 
 
-def get_index_dir_and_passage_paths(cfg, rank, index_shard_ids=None):
+def get_index_dir_and_passage_paths(cfg, index_shard_ids=None):
     embedding_args = cfg.datastore.embedding
     index_args = cfg.datastore.index
 
     # index passages
-    index_shard_ids = index_shard_ids if index_shard_ids is not None else index_args.get('index_shard_ids', None)
-    if index_shard_ids and index_shard_ids != [-1]:
-        index_shard_ids = [int(i) for i in index_shard_ids]
-        embedding_paths = [os.path.join(embedding_args.embedding_dir, embedding_args.prefix + f"{rank}_{shard_id:02d}.pkl")
-                       for shard_id in index_shard_ids]
+    # index_shard_ids = index_shard_ids if index_shard_ids is not None else index_args.get('index_shard_ids', None)
+    # if index_shard_ids and index_shard_ids != [-1]:
+    #     index_shard_ids = [int(i) for i in index_shard_ids]
+    #     embedding_paths = [os.path.join(embedding_args.embedding_dir, embedding_args.prefix + f"{rank}_{shard_id:02d}.pkl")
+    #                    for shard_id in index_shard_ids]
 
-        # name the index dir with all shard ids included in this index, i.e., one index for multiple passage shards
-        index_dir_name = str(rank) + "-" + '_'.join([str(shard_id) for shard_id in index_shard_ids])
-        index_dir = os.path.join(os.path.dirname(embedding_paths[0]), f'index/{index_dir_name}')
+    #     # name the index dir with all shard ids included in this index, i.e., one index for multiple passage shards
+    #     index_dir_name = str(rank) + "-" + '_'.join([str(shard_id) for shard_id in index_shard_ids])
+    #     index_dir = os.path.join(os.path.dirname(embedding_paths[0]), f'index/{index_dir_name}')
         
-    else:
-        embedding_paths = glob.glob(index_args.passages_embeddings)
-        embedding_paths = sorted(embedding_paths, key=lambda x: int(x.split('/')[-1].split(f'{embedding_args.prefix}')[-1].split('.pkl')[0]))  # must sort based on the integer number
-        embedding_paths = embedding_paths if index_args.num_subsampled_embedding_files == -1 else embedding_paths[0:index_args.num_subsampled_embedding_files]
-        print("EMBEDDINGS")
-        print(embedding_paths)
+    # else:
+    #     embedding_paths = glob.glob(index_args.passages_embeddings)
+    #     embedding_paths = sorted(embedding_paths, key=lambda x: int(x.split('/')[-1].split(f'{embedding_args.prefix}')[-1].split('.pkl')[0]))  # must sort based on the integer number
+    #     embedding_paths = embedding_paths if index_args.num_subsampled_embedding_files == -1 else embedding_paths[0:index_args.num_subsampled_embedding_files]
+    #     print("EMBEDDINGS")
+    #     print(embedding_paths)
         
-        index_dir = os.path.join(os.path.dirname(embedding_paths[0]), f'index')
+    #     index_dir = os.path.join(os.path.dirname(embedding_paths[0]), f'index')
+
+    embedding_paths = glob.glob(index_args.passages_embeddings)
+    embedding_paths = sorted(embedding_paths, key=lambda x: int(x.split('/')[-1].split(f'{embedding_args.prefix}')[-1].split('.pkl')[0]))  # must sort based on the integer number
+    embedding_paths = embedding_paths if index_args.num_subsampled_embedding_files == -1 else embedding_paths[0:index_args.num_subsampled_embedding_files]
+    print("EMBEDDINGS")
+    print(embedding_paths)
+    
+    index_dir = os.path.join(os.path.dirname(embedding_paths[0]), f'index')
     
     return index_dir, embedding_paths
 
@@ -349,48 +357,66 @@ def index_encoded_data(index, embedding_paths, indexing_batch_size):
 def build_dense_index(cfg):
     index_args = cfg.datastore.index
 
-    if isinstance(index_args.index_shard_ids[0], ListConfig):
-        print(f"Multi-index mode: building {len(index_args.index_shard_ids)} index for {index_args.index_shard_ids} sequentially...")
-        index_shard_ids_list = index_args.index_shard_ids
-    else:
-        print(f"Single-index mode: building a single index over {index_args.index_shard_ids} shards...")
-        index_shard_ids_list = [index_args.index_shard_ids]
+    index = Indexer(index_args.projection_size, index_args.n_subquantizers, index_args.n_bits)
+
+    index_dir, embedding_paths = get_index_dir_and_passage_paths(cfg)
+    logging.info(f"Indexing for passages: {embedding_paths}")
     
-    for i,index_shard_ids in enumerate(index_shard_ids_list):
-        # todo: support PQIVF
-        index = Indexer(index_args.projection_size, index_args.n_subquantizers, index_args.n_bits)
+    os.makedirs(index_dir, exist_ok=True)
+    index_path = os.path.join(index_dir, f"index.faiss")
+    if index_args.save_or_load_index and os.path.exists(index_path) and not index_args.overwrite:
+        index.deserialize_from(index_dir)
+        pass
+    else:
+        print(f"Indexing passages from files {embedding_paths}")
+        start_time_indexing = time.time()
+        # index encoded embeddings
+        index_encoded_data(index, embedding_paths, index_args.indexing_batch_size)
+        print(f"Indexing time: {time.time()-start_time_indexing:.1f} s.")
+        if index_args.save_or_load_index:
+            index.serialize(index_dir)
+    
+    # if isinstance(index_args.index_shard_ids[0], ListConfig):
+    #     print(f"Multi-index mode: building {len(index_args.index_shard_ids)} index for {index_args.index_shard_ids} sequentially...")
+    #     index_shard_ids_list = index_args.index_shard_ids
+    # else:
+    #     print(f"Single-index mode: building a single index over {index_args.index_shard_ids} shards...")
+    #     index_shard_ids_list = [index_args.index_shard_ids]
+    
+    # for i,index_shard_ids in enumerate(index_shard_ids_list):
+    #     # todo: support PQIVF
+    #     index = Indexer(index_args.projection_size, index_args.n_subquantizers, index_args.n_bits)
 
-        index_dir, embedding_paths = get_index_dir_and_passage_paths(cfg, i, index_shard_ids)
-        logging.info(f"Indexing for passages: {embedding_paths}")
+    #     index_dir, embedding_paths = get_index_dir_and_passage_paths(cfg, i, index_shard_ids)
+    #     logging.info(f"Indexing for passages: {embedding_paths}")
         
-        os.makedirs(index_dir, exist_ok=True)
-        index_path = os.path.join(index_dir, f"index.faiss")
-        if index_args.save_or_load_index and os.path.exists(index_path) and not index_args.overwrite:
-            index.deserialize_from(index_dir)
-            pass
-        else:
-            print(f"Indexing passages from files {embedding_paths}")
-            start_time_indexing = time.time()
-            # index encoded embeddings
-            index_encoded_data(index, embedding_paths, index_args.indexing_batch_size)
-            print(f"Indexing time: {time.time()-start_time_indexing:.1f} s.")
-            if index_args.save_or_load_index:
-                index.serialize(index_dir)
+    #     os.makedirs(index_dir, exist_ok=True)
+    #     index_path = os.path.join(index_dir, f"index.faiss")
+    #     if index_args.save_or_load_index and os.path.exists(index_path) and not index_args.overwrite:
+    #         index.deserialize_from(index_dir)
+    #         pass
+    #     else:
+    #         print(f"Indexing passages from files {embedding_paths}")
+    #         start_time_indexing = time.time()
+    #         # index encoded embeddings
+    #         index_encoded_data(index, embedding_paths, index_args.indexing_batch_size)
+    #         print(f"Indexing time: {time.time()-start_time_indexing:.1f} s.")
+    #         if index_args.save_or_load_index:
+    #             index.serialize(index_dir)
 
 
-def get_index_passages_and_id_map(cfg, rank, index_shard_ids=None):
+def get_index_passages_and_id_map(cfg, index_shard_ids=None):
     index_args = cfg.datastore.index
 
-    index_shard_ids = index_shard_ids if index_shard_ids else index_args.get('index_shard_ids', None)
-    assert index_shard_ids is not None
+    # index_shard_ids = index_shard_ids if index_shard_ids else index_args.get('index_shard_ids', None)
+    # assert index_shard_ids is not None
     
-    index_shard_ids = [int(i) for i in index_shard_ids]
+    # index_shard_ids = [int(i) for i in index_shard_ids]
 
     passages = []
     passage_id_map = {}
     offset = 0
-    if index_shard_ids == [-1]:
-        for psg_filename in os.listdir(cfg.datastore.embedding.passages_dir):
+    for psg_filename in os.listdir(cfg.datastore.embedding.passages_dir):
             print(psg_filename)
             shard_passages = fast_load_jsonl(os.path.join(cfg.datastore.embedding.passages_dir,psg_filename))
             shard_id_map = {str(x["id"]+offset): x for x in shard_passages}
@@ -398,14 +424,23 @@ def get_index_passages_and_id_map(cfg, rank, index_shard_ids=None):
             offset += len(shard_passages)
             passages.extend(shard_passages)
             passage_id_map = {**passage_id_map, **shard_id_map}
-    else:
-        for shard_id in index_shard_ids:
-            shard_passages = fast_load_jsonl_shard(cfg.datastore.embedding, None, rank, shard_id)
-            shard_id_map = {str(x["id"]+offset): x for x in shard_passages}
+    # if index_shard_ids == [-1]:
+    #     for psg_filename in os.listdir(cfg.datastore.embedding.passages_dir):
+    #         print(psg_filename)
+    #         shard_passages = fast_load_jsonl(os.path.join(cfg.datastore.embedding.passages_dir,psg_filename))
+    #         shard_id_map = {str(x["id"]+offset): x for x in shard_passages}
             
-            offset += len(shard_passages)
-            passages.extend(shard_passages)
-            passage_id_map = {**passage_id_map, **shard_id_map}
+    #         offset += len(shard_passages)
+    #         passages.extend(shard_passages)
+    #         passage_id_map = {**passage_id_map, **shard_id_map}
+    # else:
+    #     for shard_id in index_shard_ids:
+    #         shard_passages = fast_load_jsonl_shard(cfg.datastore.embedding, None, rank, shard_id)
+    #         shard_id_map = {str(x["id"]+offset): x for x in shard_passages}
+            
+    #         offset += len(shard_passages)
+    #         passages.extend(shard_passages)
+    #         passage_id_map = {**passage_id_map, **shard_id_map}
         
     return passages, passage_id_map
 

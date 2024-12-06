@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 import numpy as np
 import torch
+import math
 
 from transformers import AutoTokenizer, AutoModel
 from sentence_transformers import SentenceTransformer
@@ -100,6 +101,28 @@ def get_sharded_passages(args, all_passages):
     print(f"Using {len(passages)} passages from idx {start_idx} to {end_idx}.")
     return passages
 
+def get_shard_specs(args, file_paths):
+    file_sizes = []
+    for file in file_paths:
+        # if os.path.isdir(raw_data_path):
+        #     file_path = os.path.join(raw_data_path, file)
+        # else:
+        #     file_path =  file
+        file_path = file
+        file_sizes.append(os.path.getsize(file_path))
+    total_size = sum(file_sizes)
+    print("SIZE")
+    print(total_size)
+
+    if args.get("max_shard_size",None):
+        shard_size = args.max_shard_size
+        num_shards = math.floor(total_size/shard_size) + 1
+    elif args.get("num_shards",None):
+        shard_size = total_size / args.num_shards
+        num_shards = args.num_shards
+
+    return num_shards,shard_size
+
 
 def generate_passage_embeddings(cfg):
     if cfg.model.get("sparse_retriever", None):
@@ -122,19 +145,21 @@ def generate_passage_embeddings(cfg):
             print(f"{args.model_name_or_path} is not supported!")
             raise AttributeError
         
+        arg_num_shards = args.get("num_shards",None)
+        arg_max_shard_size = args.get("max_shard_size",None)
+        assert sum([bool(arg_num_shards),bool(arg_max_shard_size)]) == 1 , "Specify either datastore.embedding.num_shards or datastore.embedding.max_shard_size, but not both"
+        
         model.eval()
         model = model.cuda()
         if not args.no_fp16:
             model = model.half()
         
-        shard_ids = [int(i) for i in args.shard_ids]
-
         if os.path.isdir(args.raw_data_path):
             source_paths = [os.path.join(args.raw_data_path, file) for file in os.listdir(args.raw_data_path)]
         else:
             source_paths = [args.raw_data_path]
 
-        print(source_paths)
+
         rank = int(os.environ.get("BEAKER_REPLICA_RANK"))
         world_size = int(os.environ.get("BEAKER_REPLICA_COUNT"))
         # Distribute files across processes
@@ -145,6 +170,11 @@ def generate_passage_embeddings(cfg):
         # partition_destination_paths = destination_paths[start_idx:end_idx]
 
         print(f"This worker (rank {rank}) handling files:\n {partition_source_paths[0]}\n to\n {partition_source_paths[-1]}")
+
+        num_shards,shard_size = get_shard_specs(args, partition_source_paths)
+
+        # shard_ids = [int(i) for i in args.shard_ids]
+        shard_ids = range(num_shards)
 
         #TODO
         #for simplicity maybe just
@@ -158,10 +188,10 @@ def generate_passage_embeddings(cfg):
                 print(f"Embeddings exist in {embedding_shard_save_path}")
                 continue
             
-            print(partition_source_paths)
-            shard_passages = fast_load_jsonl_shard(args, partition_source_paths, rank, shard_id)
-            for passage in shard_passages:
-                print(passage)
+            shard_passages = fast_load_jsonl_shard(args, partition_source_paths, rank, shard_id, shard_size, num_shards)
+            print(f"\n\nSHARD {shard_id}\n\n")
+            for psg in shard_passages:
+                print(psg)
 
             allids, allembeddings = embed_passages(args, shard_passages, model, tokenizer)
 
@@ -170,7 +200,7 @@ def generate_passage_embeddings(cfg):
             with open(embedding_shard_save_path, mode="wb") as file:
                 pickle.dump((allids, allembeddings), file)
 
-            print(f"Processed {len(allids)} passages in the {shard_id}-th (out of {args.num_shards}) shard.\nWritten to {embedding_shard_save_path}.")
+            print(f"Processed {len(allids)} passages in the {shard_id}-th (out of {num_shards}) shard.\nWritten to {embedding_shard_save_path}.")
 
 
 if __name__ == "__main__":
