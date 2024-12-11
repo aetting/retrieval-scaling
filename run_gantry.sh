@@ -35,5 +35,6 @@ gantry run \
     --env-secret WANDB_API_KEY=WANDB_API_KEY \
     --shared-memory 10GiB \
     --conda environment.yml \
+    --install "pip install hydra-core" \
     --yes \
     -- ./run_embedding.sh
