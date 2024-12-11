@@ -36,4 +36,4 @@ gantry run \
     --shared-memory 10GiB \
     --conda environment.yml \
     --yes \
-    -- run_embedding.sh
+    -- ./run_embedding.sh
