@@ -105,15 +105,14 @@ def get_sharded_passages(args, all_passages):
     print(f"Using {len(passages)} passages from idx {start_idx} to {end_idx}.")
     return passages
 
-def get_shard_specs(args, file_paths):
-    file_sizes = []
-    for file in file_paths:
-        # if os.path.isdir(raw_data_path):
-        #     file_path = os.path.join(raw_data_path, file)
-        # else:
-        #     file_path =  file
-        file_path = file
-        file_sizes.append(os.path.getsize(file_path))
+def get_shard_specs(args, file_paths, file_sizes):
+    # file_sizes = []
+    # if "s3://" in args.raw_data_path:
+    #     for obj in source_files:
+    #         file_sizes.append(obj["Size"])
+    # else:
+    #     for file_path in source_files:
+    #         file_sizes.append(os.path.getsize(file_path))
     total_size = sum(file_sizes)
     print("SIZE")
     print(total_size)
@@ -127,7 +126,7 @@ def get_shard_specs(args, file_paths):
 
     return num_shards,shard_size
 
-def get_filepaths(args):
+def get_file_paths_and_sizes(args):
     if "s3://" in args.raw_data_path:
         client = boto3.client('s3')
         m = re.match("s3://([^/]+)/(.*)",args.raw_data_path)
@@ -136,19 +135,41 @@ def get_filepaths(args):
         paginator = client.get_paginator('list_objects_v2')
         pages = paginator.paginate(Bucket=bucket, Prefix=filedir)
 
-        source_paths = []
+        file_paths = []
+        file_sizes = []
         for page in pages:
             for obj in page["Contents"]:
                 okey = obj["Key"]
                 if "jsonl" not in okey:
                     continue
                 filepath = f"s3://{bucket}/{okey}"
-                source_paths.append(filepath)
+                file_paths.append(filepath)
+                file_sizes.append(obj["Size"])
 
     else:
-        source_paths = [os.path.join(args.raw_data_path, file) for file in os.listdir(args.raw_data_path)]
+        for file in os.listdir(args.raw_data_path):
+            file_paths.append(os.path.join(args.raw_data_path, file))
+            file_sizes.append(os.path.getsize(file_path))
 
-    return source_paths
+    return file_paths,file_sizes
+
+def get_file_partitions(args):
+    file_paths,file_sizes = get_file_paths_and_sizes(args)
+    print(file_paths)
+
+    rank = int(os.environ.get("BEAKER_REPLICA_RANK"))
+    world_size = int(os.environ.get("BEAKER_REPLICA_COUNT"))
+    # Distribute files across processes
+    files_per_process = len(file_paths) / world_size
+    start_idx = int(rank * files_per_process)
+    end_idx = int((rank + 1) * files_per_process) if rank < world_size - 1 else len(file_paths)
+    partition_file_paths = file_paths[start_idx:end_idx]
+    partition_file_sizes = file_sizes[start_idx:end_idx]
+    # partition_destination_paths = destination_paths[start_idx:end_idx]
+
+    print(f"This worker (rank {rank}) handling files:\n {partition_file_paths[0]}\n to\n {partition_file_paths[-1]}")
+
+    return partition_file_paths,partition_file_sizes,rank
 
 
 def generate_passage_embeddings(cfg):
@@ -186,21 +207,23 @@ def generate_passage_embeddings(cfg):
         # else:
         #     source_paths = [args.raw_data_path]
 
-        source_paths = get_filepaths(args)
-        print(source_paths)
+        # file_list = get_file_list(args)
+        # print(file_list)
 
-        rank = int(os.environ.get("BEAKER_REPLICA_RANK"))
-        world_size = int(os.environ.get("BEAKER_REPLICA_COUNT"))
-        # Distribute files across processes
-        files_per_process = len(source_paths) / world_size
-        start_idx = int(rank * files_per_process)
-        end_idx = int((rank + 1) * files_per_process) if rank < world_size - 1 else len(source_paths)
-        partition_source_paths = source_paths[start_idx:end_idx]
-        # partition_destination_paths = destination_paths[start_idx:end_idx]
+        # rank = int(os.environ.get("BEAKER_REPLICA_RANK"))
+        # world_size = int(os.environ.get("BEAKER_REPLICA_COUNT"))
+        # # Distribute files across processes
+        # files_per_process = len(file_list) / world_size
+        # start_idx = int(rank * files_per_process)
+        # end_idx = int((rank + 1) * files_per_process) if rank < world_size - 1 else len(file_list)
+        # partition_file_list = file_list[start_idx:end_idx]
+        # # partition_destination_paths = destination_paths[start_idx:end_idx]
 
-        print(f"This worker (rank {rank}) handling files:\n {partition_source_paths[0]}\n to\n {partition_source_paths[-1]}")
+        # print(f"This worker (rank {rank}) handling files:\n {partition_source_paths[0]}\n to\n {partition_source_paths[-1]}")
 
-        num_shards,shard_size = get_shard_specs(args, partition_source_paths)
+        # num_shards,shard_size = get_shard_specs(args, partition_file_list)
+        partition_file_paths,partition_file_sizes,rank = get_file_partitions(args)
+        num_shards,shard_size = get_shard_specs(args, partition_file_paths,partition_file_sizes)
 
         # shard_ids = [int(i) for i in args.shard_ids]
         shard_ids = range(num_shards)
@@ -217,7 +240,7 @@ def generate_passage_embeddings(cfg):
                 print(f"Embeddings exist in {embedding_shard_save_path}")
                 continue
             
-            shard_passages = fast_load_jsonl_shard(args, partition_source_paths, rank, shard_id, shard_size, num_shards)
+            shard_passages = fast_load_jsonl_shard(args, partition_file_paths, partition_file_sizes, rank, shard_id, shard_size, num_shards)
             print(f"\n\nSHARD {shard_id}\n\n")
             for psg in shard_passages:
                 print(psg)
@@ -226,7 +249,7 @@ def generate_passage_embeddings(cfg):
 
             os.makedirs(args.embedding_dir, exist_ok=True)
             print(f"Saving {len(allids)} passage embeddings to {embedding_shard_save_path}.")
-            with open(embedding_shard_save_path, mode="wb") as file:
+            with smart_open.open(embedding_shard_save_path, mode="wb") as file:
                 pickle.dump((allids, allembeddings), file)
 
             print(f"Processed {len(allids)} passages in the {shard_id}-th (out of {num_shards}) shard.\nWritten to {embedding_shard_save_path}.")

@@ -14,7 +14,7 @@ import smart_open
 
 
 ############################## Training ##############################
-def fast_load_jsonl_shard(args,file_paths,rank,shard_index, shard_size,num_shards):
+def fast_load_jsonl_shard(args,file_paths,file_sizes,rank,shard_index, shard_size,num_shards):
     """
     This function is designed to handle large datasets by only loading the specific portion of data (shard) that 
     corresponds to the given shard index.
@@ -31,29 +31,29 @@ def fast_load_jsonl_shard(args,file_paths,rank,shard_index, shard_size,num_shard
 
     passage_shard_save_path = os.path.join(args.passages_dir, f'raw_passages_{rank}-{shard_index}-of-{num_shards}.pkl')
     
-    if os.path.exists(passage_shard_save_path):
-        logging.info(f'Loading from {passage_shard_save_path}...')
-        with open(passage_shard_save_path, 'rb') as file:
-            passages = pickle.load(file)
-        return passages
+    # if os.path.exists(passage_shard_save_path):
+    #     logging.info(f'Loading from {passage_shard_save_path}...')
+    #     with open(passage_shard_save_path, 'rb') as file:
+    #         passages = pickle.load(file)
+    #     return passages
 
-    if not os.path.exists(raw_data_path):
-        logging.info(f"{raw_data_path} does not exist")
-        return
+    # if not os.path.exists(raw_data_path):
+    #     logging.info(f"{raw_data_path} does not exist")
+    #     return
 
     # if os.path.isdir(raw_data_path):
     #     all_file_paths = [os.path.join(raw_data_path, file) for file in os.listdir(raw_data_path)]
     # else:
     #     all_file_paths = [raw_data_path]
     
-    file_sizes = []
-    for file in file_paths:
-        # if os.path.isdir(raw_data_path):
-        #     file_path = os.path.join(raw_data_path, file)
-        # else:
-        #     file_path =  file
-        file_path = file
-        file_sizes.append(os.path.getsize(file_path))
+    # file_sizes = []
+    # for file in file_paths:
+    #     # if os.path.isdir(raw_data_path):
+    #     #     file_path = os.path.join(raw_data_path, file)
+    #     # else:
+    #     #     file_path =  file
+    #     file_path = file
+    #     file_sizes.append(os.path.getsize(file_path))
     # total_size = sum(file_sizes)
     # print("SIZE")
     # print(total_size)
@@ -81,7 +81,7 @@ def fast_load_jsonl_shard(args,file_paths,rank,shard_index, shard_size,num_shard
     idx = 0
     for file_path, start_in_file, end_in_file in shard_files:
         # with smart_open.open(f"s3://{bucket}/{okey}") as f:
-        with open(file_path, 'r', encoding='utf-8') as file:
+        with smart_open.open(file_path, 'r', encoding='utf-8') as file:
             file.seek(int(start_in_file))
             # Skip the rest of the partial line after seeking, if not at the start of the file
             if start_in_file != 0:
@@ -108,7 +108,7 @@ def fast_load_jsonl_shard(args,file_paths,rank,shard_index, shard_size,num_shard
     
     if args.get('passages_dir', None):
         os.makedirs(args.passages_dir, exist_ok=True)
-        with open(passage_shard_save_path, 'wb') as file:
+        with smart_open.open(passage_shard_save_path, 'wb') as file:
             pickle.dump(passages, file)
 
     return passages
@@ -132,7 +132,7 @@ def fast_load_jsonl(passage_save_path):
     
     # if os.path.exists(passage_shard_save_path):
     logging.info(f'Loading from {passage_save_path}...')
-    with open(passage_save_path, 'rb') as file:
+    with smart_open.open(passage_save_path, 'rb') as file:
         passages = pickle.load(file)
     return passages
 

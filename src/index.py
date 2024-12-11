@@ -17,6 +17,8 @@ from typing import List, Tuple, Any
 from abc import ABC, abstractmethod
 from omegaconf import ListConfig
 import subprocess
+import s3fs
+import smart_open
 
 import faiss
 import numpy as np
@@ -98,12 +100,16 @@ class Indexer(object):
         return result
 
     def serialize(self, dir_path):
-        index_file = os.path.join(dir_path, 'index.faiss')
+        if "s3://" in dirpath:
+            os.mkdir("tmp")
+            index_file = os.path.join("tmp", 'index.faiss')
+        else:
+            index_file = os.path.join(dir_path, 'index.faiss')
         meta_file = os.path.join(dir_path, 'index_meta.faiss')
         print(f'Serializing index to {index_file}, meta data to {meta_file}')
 
         faiss.write_index(self.index, index_file)
-        with open(meta_file, mode='wb') as f:
+        with smart_open.open(meta_file, mode='wb') as f:
             pickle.dump(self.index_id_to_db_id, f)
 
     def deserialize_from(self, dir_path):
@@ -291,6 +297,15 @@ def add_embeddings(index, embeddings, ids, indexing_batch_size, id_offset=0):
     index.index_data(ids_toadd, embeddings_toadd)
     return embeddings, ids
 
+def get_glob_flex(glob_input):
+    if "s3://" in glob_input:
+        s3 = s3fs.S3FileSystem(anon=False)
+        file_paths = ["s3://" + e for e in s3.glob(glob_input)]
+    else:
+        file_paths = glob.glob(glob_input)
+
+    return file_paths
+
 
 def get_index_dir_and_passage_paths(cfg, index_shard_ids=None):
     embedding_args = cfg.datastore.embedding
@@ -316,7 +331,8 @@ def get_index_dir_and_passage_paths(cfg, index_shard_ids=None):
         
     #     index_dir = os.path.join(os.path.dirname(embedding_paths[0]), f'index')
 
-    embedding_paths = glob.glob(index_args.passages_embeddings)
+    # embedding_paths = glob.glob(index_args.passages_embeddings)
+    embedding_paths = get_glob_flex(index_args.passages_embeddings)
     embedding_paths = sorted(embedding_paths, key=lambda x: int(x.split('/')[-1].split(f'{embedding_args.prefix}')[-1].split('.pkl')[0]))  # must sort based on the integer number
     embedding_paths = embedding_paths if index_args.num_subsampled_embedding_files == -1 else embedding_paths[0:index_args.num_subsampled_embedding_files]
     print("EMBEDDINGS")
@@ -334,7 +350,7 @@ def index_encoded_data(index, embedding_paths, indexing_batch_size):
     id_offset = 0  
     for i, file_path in enumerate(embedding_paths):
         print(f"Loading file {file_path}")
-        with open(file_path, "rb") as fin:
+        with smart_open.open(file_path, "rb") as fin:
             ids, embeddings = pickle.load(fin)
         
         assert min(ids)==0, f'Passage ids start with {min(ids)}, not 0: {file_path}'

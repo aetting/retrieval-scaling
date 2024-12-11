@@ -1,14 +1,11 @@
-name: scaling
-channels:
-  - pytorch
-  - nvidia
-  - conda-forge
-  - defaults
+name: env-retrieval
+
 dependencies:
   - python=3.11
   - numpy
-  - torch
-  - faiss-gpu=1.8.0
+  - pytorch
+  - pytorch::faiss-gpu=1.8.0
+  - pip
   
   - pip:
     - omegaconf
@@ -18,3 +15,6 @@ dependencies:
     - sentence_transformers
     - pyserini
     - datasketch
+    - boto3
+    - smart_open
+    - s3fs

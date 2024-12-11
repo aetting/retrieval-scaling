@@ -2,8 +2,8 @@ name: default
 
 tasks:
   datastore:
-    embedding: true
-    index: false
+    embedding: false
+    index: true
   eval: 
     task_name: gen  # task name is used to load the eval data. Options:["perplexity", "lm-eval"].
     search: false  # search top-k offline
@@ -29,10 +29,12 @@ datastore:
   
   embedding:
     raw_data_path: ${datastore.raw_data_path}
+    # output_dir: /net/nfs.cirrascale/allennlp/allysone/reddit/scaling_out_mini/
+    output_dir: s3://ai2-llm/pretraining-data/sources/reddit/dolma_raw/merged_versions/scaling_out_mini
     # num_shards: 4
     chunk_size: ${datastore.chunk_size}
     keep_last_chunk: true
-    passages_dir: /net/nfs.cirrascale/allennlp/allysone/reddit/scaling_out_mini/passages/${datastore.domain}
+    passages_dir: ${datastore.embedding.output_dir}/passages/${datastore.domain}
     max_shard_size: 1000000000
 
     per_gpu_batch_size: 512
@@ -47,7 +49,8 @@ datastore:
 
 
     prefix: "passages"
-    embedding_dir: /net/nfs.cirrascale/allennlp/allysone/reddit/scaling_out_mini/embeddings/${model.datastore_encoder}/${datastore.domain}
+    # embedding_dir: /net/nfs.cirrascale/allennlp/allysone/reddit/scaling_out_mini/embeddings/${model.datastore_encoder}/${datastore.domain}
+    embedding_dir: ${datastore.embedding.output_dir}/embeddings/${model.datastore_encoder}/${datastore.domain}
     use_saved_if_exists: true
 
   index:
@@ -95,7 +98,7 @@ evaluation:
   concate_k: 3    # Number of retrieved passages for concatenation, 0 means LM-only
   max_retrieval_len: 1024
   calibration_out_dir: null
-  eval_output_dir: /net/nfs.cirrascale/allennlp/allysone/reddit/scaling_out_mini/retrieved_results/${model.datastore_encoder}/${datastore.domain}_datastore-${datastore.chunk_size}_chunk_size/top_${evaluation.search.n_docs}
+  eval_output_dir: ${datastore.embedding.output_dir}/retrieved_results/${model.datastore_encoder}/${datastore.domain}_datastore-${datastore.chunk_size}_chunk_size/top_${evaluation.search.n_docs}
   results_only_log_file: scaling_out/test_c4_ppl.log
   debug_mode: false
   decontamination: false
