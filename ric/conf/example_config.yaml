@@ -3,10 +3,10 @@ name: default
 tasks:
   datastore:
     embedding: false
-    index: true
+    index: false
   eval: 
     task_name: gen  # task name is used to load the eval data. Options:["perplexity", "lm-eval"].
-    search: false  # search top-k offline
+    search: true  # search top-k offline
     merge_search: false  # merge searched results from multiple sources
     inference: false  # run inference with LM
 
@@ -66,7 +66,7 @@ datastore:
     projection_size: 768
     n_subquantizers: 0    # Number of subquantizer used for vector quantization, if 0 flat index is used
     n_bits: 64    # Number of bits per subquantizer
-    overwrite: false
+    overwrite: true
 
 
 evaluation:
@@ -89,7 +89,9 @@ evaluation:
     rerank_n_docs: null  # number of documents used for reranking, set to null if not removing any data
     use_saved_dedup_data: false  # reuse the saved dedupped data for efficient subsampling
   data:
-    eval_data: "/net/nfs.cirrascale/allennlp/allysone/reddit/mmlu/mmlu_queries/test_queries/mmlu_queries_corr/global_facts_test.jsonl"
+    # eval_data: "/net/nfs.cirrascale/allennlp/allysone/reddit/mmlu/mmlu_queries/test_queries/mmlu_queries_corr/global_facts_test.jsonl"
+    # eval_data: "s3://ai2-llm/pretraining-data/sources/reddit/dolma_raw/mmlu_queries/test_queries/mmlu_queries_corr/global_facts_test.jsonl"
+    eval_data: /net/nfs.cirrascale/allennlp/allysone/reddit/query_lib/sanity_check.jsonl
     max_eval_data_seq_length: 1024
     eval_stride: 512
     merge: True

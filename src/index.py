@@ -18,7 +18,12 @@ from abc import ABC, abstractmethod
 from omegaconf import ListConfig
 import subprocess
 import s3fs
+import boto3
 import smart_open
+import re
+import shutil
+
+from pathlib import Path
 
 import faiss
 import numpy as np
@@ -100,8 +105,7 @@ class Indexer(object):
         return result
 
     def serialize(self, dir_path):
-        if "s3://" in dirpath:
-            os.mkdir("tmp")
+        if "s3://" in dir_path:
             index_file = os.path.join("tmp", 'index.faiss')
         else:
             index_file = os.path.join(dir_path, 'index.faiss')
@@ -111,6 +115,14 @@ class Indexer(object):
         faiss.write_index(self.index, index_file)
         with smart_open.open(meta_file, mode='wb') as f:
             pickle.dump(self.index_id_to_db_id, f)
+        
+        if "s3://" in dir_path:
+            client = boto3.client('s3')
+            m = re.match("s3://([^/]+)/(.*)",dir_path)
+            bucket, filedir = m.groups()[0],m.groups()[1]
+            import pdb; pdb.set_trace()
+            client.put_object(Body=index_file, Bucket=bucket, Key=f"{filedir}/index.faiss")
+            # os.deletedir
 
     def deserialize_from(self, dir_path):
         index_file = os.path.join(dir_path, 'index.faiss')
@@ -120,7 +132,7 @@ class Indexer(object):
         self.index = faiss.read_index(index_file)
         print('Loaded index of type %s and size %d', type(self.index), self.index.ntotal)
 
-        with open(meta_file, "rb") as reader:
+        with smart_open.open(meta_file, "rb") as reader:
             self.index_id_to_db_id = pickle.load(reader)
         assert len(
             self.index_id_to_db_id) == self.index.ntotal, 'Deserialized index_id_to_db_id should match faiss index size'
@@ -378,7 +390,11 @@ def build_dense_index(cfg):
     index_dir, embedding_paths = get_index_dir_and_passage_paths(cfg)
     logging.info(f"Indexing for passages: {embedding_paths}")
     
-    os.makedirs(index_dir, exist_ok=True)
+    if "s3://" in index_dir:
+        tmp_dir_path = Path("tmp")
+        tmp_dir_path.mkdir(parents=True, exist_ok=True)
+    else:
+        os.makedirs(index_dir, exist_ok=True)
     index_path = os.path.join(index_dir, f"index.faiss")
     if index_args.save_or_load_index and os.path.exists(index_path) and not index_args.overwrite:
         index.deserialize_from(index_dir)
@@ -391,6 +407,8 @@ def build_dense_index(cfg):
         print(f"Indexing time: {time.time()-start_time_indexing:.1f} s.")
         if index_args.save_or_load_index:
             index.serialize(index_dir)
+    if "s3://" in index_dir:
+        shutil.rmtree("tmp")
     
     # if isinstance(index_args.index_shard_ids[0], ListConfig):
     #     print(f"Multi-index mode: building {len(index_args.index_shard_ids)} index for {index_args.index_shard_ids} sequentially...")
@@ -432,9 +450,9 @@ def get_index_passages_and_id_map(cfg, index_shard_ids=None):
     passages = []
     passage_id_map = {}
     offset = 0
-    for psg_filename in os.listdir(cfg.datastore.embedding.passages_dir):
-            print(psg_filename)
-            shard_passages = fast_load_jsonl(os.path.join(cfg.datastore.embedding.passages_dir,psg_filename))
+    for psg_filepath in get_glob_flex(os.path.join(cfg.datastore.embedding.passages_dir,"*.pkl")):
+            print(psg_filepath)
+            shard_passages = fast_load_jsonl(psg_filepath)
             shard_id_map = {str(x["id"]+offset): x for x in shard_passages}
             
             offset += len(shard_passages)

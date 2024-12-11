@@ -14,6 +14,8 @@ from collections import Counter
 from omegaconf import ListConfig
 import multiprocessing
 
+import smart_open
+
 import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModel
@@ -330,6 +332,7 @@ def search_dense_topk(cfg):
 
         # load passages and id mapping corresponding to the index
         passages, passage_id_map = get_index_passages_and_id_map(cfg)
+        import pdb; pdb.set_trace()
         assert len(passages) == index.index.ntotal, f"number of documents {len(passages)} and number of embeddings {index.index.ntotal} mismatch"
 
         # get top k results
@@ -342,7 +345,8 @@ def search_dense_topk(cfg):
         logging.info(f"Adding documents to eval data...")
         add_passages(copied_data, passage_id_map, top_ids_and_scores, valid_query_idx, embedding_args, domain=ds_domain)
         
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        if "s3://" not in output_path:
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
         safe_write_jsonl(copied_data, output_path)
     
     # if cfg.evaluation.search.get('merge_multi_source_results', False) and cfg.evaluation.search.get("topk_subsample_p", None):
@@ -868,18 +872,18 @@ def search_sparse_topk(cfg):
 def safe_write_jsonl(data, output_file):
     success = False
     try:
-        with open(output_file, 'w') as fout:
+        with smart_open.open(output_file, 'w') as fout:
             for ex in data:
                 fout.write(json.dumps(ex) + "\n")
             success = True
         logging.info(f"Saved results to {output_file}")
     except Exception as e:
         print(f"An error occurred: {e}")
-    finally:
-    # If an error was raised, and success is still False, delete the file
-        if not success and os.path.exists(output_file):
-            os.remove(output_file)
-            print(f"File '{output_file}' has been deleted due to an error.")
+    # finally:
+    # # If an error was raised, and success is still False, delete the file
+    #     if not success and os.path.exists(output_file):
+    #         os.remove(output_file)
+    #         print(f"File '{output_file}' has been deleted due to an error.")
 
 
 def search_topk(cfg):

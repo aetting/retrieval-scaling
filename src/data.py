@@ -340,9 +340,9 @@ def prepare_ppl_eval_data(data, tokenizer, max_seq_length, stride, merge, num_ev
 
 
 def load_jsonl(data_path):
-    assert os.path.exists(data_path)
+    # assert os.path.exists(data_path)
     data = []
-    with open(data_path, "r") as file:
+    with smart_open.open(data_path, "r") as file:
         for line in file:
             ex = json.loads(line)
             data.append(ex)
