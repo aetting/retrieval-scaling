@@ -23,7 +23,7 @@ gantry run \
     --priority "${PRIORITY}" \
     --leader-selection \
     --gpus 1 \
-    --replicas 4 \
+    --replicas 2 \
     --preemptible \
     --cluster "${CLUSTER}" \
     --budget ai2/oe-data \
@@ -34,7 +34,5 @@ gantry run \
     --env-secret AWS_SECRET_ACCESS_KEY=AWS_SECRET_ACCESS_KEY \
     --env-secret WANDB_API_KEY=WANDB_API_KEY \
     --shared-memory 10GiB \
-    --conda environment.yml \
-    --install "pip install hydra-core" \
     --yes \
     -- ./run_embedding.sh

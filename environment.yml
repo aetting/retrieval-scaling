@@ -6,7 +6,6 @@ dependencies:
   - pytorch
   - pytorch::faiss-gpu=1.8.0
   - pip
-  
   - pip:
     - omegaconf
     - hydra-core
