@@ -122,8 +122,6 @@ class Indexer(object):
             bucket, filedir = m.groups()[0],m.groups()[1]
             client.put_object(Body=index_file, Bucket=bucket, Key=f"{filedir}/index.faiss")
 
-        import pdb; pdb.set_trace()
-
     def deserialize_from(self, dir_path):
         index_file = os.path.join(dir_path, 'index.faiss')
         meta_file = os.path.join(dir_path, 'index_meta.faiss')
