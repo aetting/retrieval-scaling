@@ -344,6 +344,7 @@ def search_dense_topk(cfg):
 
         # load passages and id mapping corresponding to the index
         passages, passage_id_map = get_index_passages_and_id_map(cfg)
+        import pdb; pdb.set_trace()
         assert len(passages) == index.index.ntotal, f"number of documents {len(passages)} and number of embeddings {index.index.ntotal} mismatch"
 
         # get top k results

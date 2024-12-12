@@ -452,6 +452,7 @@ def build_dense_index(cfg):
 
 def get_index_passages_and_id_map(cfg, index_shard_ids=None):
     index_args = cfg.datastore.index
+    embedding_args = cfg.datastore.embedding
 
     # index_shard_ids = index_shard_ids if index_shard_ids else index_args.get('index_shard_ids', None)
     # assert index_shard_ids is not None
@@ -461,10 +462,13 @@ def get_index_passages_and_id_map(cfg, index_shard_ids=None):
     passages = []
     passage_id_map = {}
     offset = 0
-    for psg_filepath in get_glob_flex(os.path.join(cfg.datastore.embedding.passages_dir,"*.pkl")):
+    psg_paths = get_glob_flex(os.path.join(embedding_args.passages_dir,"*.pkl"))
+    psg_paths = sorted(psg_paths, key=lambda x: x.split('/')[-1].split(f'{embedding_args.prefix}_')[-1].split('.pkl')[0])
+    for psg_filepath in psg_paths:
             print(psg_filepath)
             shard_passages = fast_load_jsonl(psg_filepath)
             shard_id_map = {str(x["id"]+offset): x for x in shard_passages}
+            import pdb; pdb.set_trace()
             
             offset += len(shard_passages)
             passages.extend(shard_passages)
