@@ -6,7 +6,7 @@ tasks:
     index: true
   eval: 
     task_name: gen  # task name is used to load the eval data. Options:["perplexity", "lm-eval"].
-    search: true  # search top-k offline
+    search: false  # search top-k offline
     merge_search: false  # merge searched results from multiple sources
     inference: false  # run inference with LM
 
@@ -67,6 +67,7 @@ datastore:
     n_subquantizers: 0    # Number of subquantizer used for vector quantization, if 0 flat index is used
     n_bits: 64    # Number of bits per subquantizer
     overwrite: true
+    tmp_dir: /output
 
 
 evaluation:

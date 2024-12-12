@@ -104,9 +104,9 @@ class Indexer(object):
             result.extend([(db_ids[i], scores[i]) for i in range(len(db_ids))])
         return result
 
-    def serialize(self, dir_path):
+    def serialize(self, dir_path, tmp_path = "tmp"):
         if "s3://" in dir_path:
-            index_file = os.path.join("tmp", 'index.faiss')
+            index_file = os.path.join(tmp_path, 'index.faiss')
         else:
             index_file = os.path.join(dir_path, 'index.faiss')
         meta_file = os.path.join(dir_path, 'index_meta.faiss')
@@ -121,7 +121,8 @@ class Indexer(object):
             m = re.match("s3://([^/]+)/(.*)",dir_path)
             bucket, filedir = m.groups()[0],m.groups()[1]
             client.put_object(Body=index_file, Bucket=bucket, Key=f"{filedir}/index.faiss")
-            # os.deletedir
+
+        import pdb; pdb.set_trace()
 
     def deserialize_from(self, dir_path):
         index_file = os.path.join(dir_path, 'index.faiss')
@@ -390,7 +391,10 @@ def build_dense_index(cfg):
     logging.info(f"Indexing for passages: {embedding_paths}")
     
     if "s3://" in index_dir:
-        tmp_dir_path = Path("tmp")
+        if index_args.get("tmp_dir",None):
+            tmp_dir_path = Path(os.path.join(index_args.tmp_dir,"tmp"))
+        else:
+            tmp_dir_path = Path(os.path.join("tmp"))
         tmp_dir_path.mkdir(parents=True, exist_ok=True)
     else:
         os.makedirs(index_dir, exist_ok=True)
@@ -405,9 +409,9 @@ def build_dense_index(cfg):
         index_encoded_data(index, embedding_paths, index_args.indexing_batch_size)
         print(f"Indexing time: {time.time()-start_time_indexing:.1f} s.")
         if index_args.save_or_load_index:
-            index.serialize(index_dir)
+            index.serialize(index_dir,tmp_path = tmp_dir_path)
     if "s3://" in index_dir:
-        shutil.rmtree("tmp")
+        shutil.rmtree(tmp_dir_path)
     
     # if isinstance(index_args.index_shard_ids[0], ListConfig):
     #     print(f"Multi-index mode: building {len(index_args.index_shard_ids)} index for {index_args.index_shard_ids} sequentially...")
