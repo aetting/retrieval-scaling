@@ -418,8 +418,8 @@ def build_dense_index(cfg):
         print(f"Indexing time: {time.time()-start_time_indexing:.1f} s.")
         if index_args.save_or_load_index:
             index.serialize(index_dir,tmp_path = tmp_dir_path)
-    if "s3://" in index_dir:
-        shutil.rmtree(tmp_dir_path)
+    # if "s3://" in index_dir:
+    #     shutil.rmtree(tmp_dir_path)
     
     # if isinstance(index_args.index_shard_ids[0], ListConfig):
     #     print(f"Multi-index mode: building {len(index_args.index_shard_ids)} index for {index_args.index_shard_ids} sequentially...")
