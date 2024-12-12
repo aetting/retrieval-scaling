@@ -107,9 +107,10 @@ class Indexer(object):
     def serialize(self, dir_path, tmp_path = "tmp"):
         if "s3://" in dir_path:
             index_file = os.path.join(tmp_path, 'index.faiss')
+            meta_file = os.path.join(tmp_path, 'index_meta.faiss')
         else:
             index_file = os.path.join(dir_path, 'index.faiss')
-        meta_file = os.path.join(dir_path, 'index_meta.faiss')
+            meta_file = os.path.join(dir_path, 'index_meta.faiss')
         print(f'Serializing index to {index_file}, meta data to {meta_file}')
 
         faiss.write_index(self.index, index_file)
@@ -121,9 +122,17 @@ class Indexer(object):
             m = re.match("s3://([^/]+)/(.*)",dir_path)
             bucket, filedir = m.groups()[0],m.groups()[1]
             client.put_object(Body=index_file, Bucket=bucket, Key=f"{filedir}/index.faiss")
+            client.put_object(Body=meta_file, Bucket=bucket, Key=f"{filedir}/index_meta.faiss")
 
-    def deserialize_from(self, dir_path):
+    def deserialize_from(self, dir_path, tmp_path = "tmp"):
         index_file = os.path.join(dir_path, 'index.faiss')
+        if "s3://" in dir_path:
+            client = boto3.client('s3')
+            m = re.match("s3://([^/]+)/(.*)",index_file)
+            bucket, filepath = m.groups()[0],m.groups()[1]
+            client.download_file(bucket, filepath, os.path.join(tmp_path,"index.faiss"))
+            index_file = os.path.join(tmp_path,"index.faiss")
+
         meta_file = os.path.join(dir_path, 'index_meta.faiss')
         print(f'Loading index from {index_file}, meta data from {meta_file}')
 

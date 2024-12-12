@@ -2,11 +2,11 @@ name: default
 
 tasks:
   datastore:
-    embedding: false
+    embedding: true
     index: false
   eval: 
     task_name: gen  # task name is used to load the eval data. Options:["perplexity", "lm-eval"].
-    search: true  # search top-k offline
+    search: false  # search top-k offline
     merge_search: false  # merge searched results from multiple sources
     inference: false  # run inference with LM
 
@@ -29,8 +29,8 @@ datastore:
   
   embedding:
     raw_data_path: ${datastore.raw_data_path}
-    # output_dir: /net/nfs.cirrascale/allennlp/allysone/reddit/scaling_out_mini/
-    output_dir: s3://ai2-llm/pretraining-data/sources/reddit/dolma_raw/merged_versions/scaling_out_mini
+    output_dir: /net/nfs.cirrascale/allennlp/allysone/reddit/scaling_out_mini/
+    # output_dir: s3://ai2-llm/pretraining-data/sources/reddit/dolma_raw/merged_versions/scaling_out_mini
     # num_shards: 4
     chunk_size: ${datastore.chunk_size}
     keep_last_chunk: true
@@ -67,7 +67,7 @@ datastore:
     n_subquantizers: 0    # Number of subquantizer used for vector quantization, if 0 flat index is used
     n_bits: 64    # Number of bits per subquantizer
     overwrite: true
-    tmp_dir: /output
+    # tmp_dir: /output
 
 
 evaluation:

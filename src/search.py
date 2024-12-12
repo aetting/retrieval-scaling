@@ -16,6 +16,8 @@ import multiprocessing
 
 import smart_open
 
+from pathlib import Path
+
 import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModel
@@ -324,15 +326,24 @@ def search_dense_topk(cfg):
         #     logging.info(f'{output_path} exists, skipping searching.')
 
         # else:
-        copied_data = copy.deepcopy(data)
+        copied_data = copy.deepcopy(data) 
 
         index_dir, _ = get_index_dir_and_passage_paths(cfg)
         index = Indexer(index_args.projection_size, index_args.n_subquantizers, index_args.n_bits)
-        index.deserialize_from(index_dir)
+
+        if "s3://" in index_dir:
+            if index_args.get("tmp_dir",None):
+                tmp_dir_path = Path(os.path.join(index_args.tmp_dir,"tmp"))
+            else:
+                tmp_dir_path = Path("tmp")
+            tmp_dir_path.mkdir(parents=True, exist_ok=True)
+            index.deserialize_from(index_dir,tmp_path=tmp_dir_path)
+            # shutil.rmtree(tmp_dir_path)
+        else:
+            index.deserialize_from(index_dir)
 
         # load passages and id mapping corresponding to the index
         passages, passage_id_map = get_index_passages_and_id_map(cfg)
-        import pdb; pdb.set_trace()
         assert len(passages) == index.index.ntotal, f"number of documents {len(passages)} and number of embeddings {index.index.ntotal} mismatch"
 
         # get top k results
@@ -348,6 +359,7 @@ def search_dense_topk(cfg):
         if "s3://" not in output_path:
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
         safe_write_jsonl(copied_data, output_path)
+        
     
     # if cfg.evaluation.search.get('merge_multi_source_results', False) and cfg.evaluation.search.get("topk_subsample_p", None):
     #     post_hoc_merge_topk_multi_domain(cfg)
