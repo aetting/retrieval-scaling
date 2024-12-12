@@ -242,8 +242,8 @@ def generate_passage_embeddings(cfg):
             
             shard_passages = fast_load_jsonl_shard(args, partition_file_paths, partition_file_sizes, rank, shard_id, shard_size, num_shards)
             print(f"\n\nSHARD {shard_id}\n\n")
-            for psg in shard_passages:
-                print(psg)
+            print(shard_passages[0])
+            print(shard_passages[-1])
 
             allids, allembeddings = embed_passages(args, shard_passages, model, tokenizer)
 
