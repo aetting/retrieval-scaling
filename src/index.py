@@ -405,6 +405,7 @@ def build_dense_index(cfg):
         tmp_dir_path.mkdir(parents=True, exist_ok=True)
     else:
         os.makedirs(index_dir, exist_ok=True)
+        tmp_dir_path = None
     index_path = os.path.join(index_dir, f"index.faiss")
     if index_args.save_or_load_index and os.path.exists(index_path) and not index_args.overwrite:
         index.deserialize_from(index_dir)
