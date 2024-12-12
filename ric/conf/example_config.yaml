@@ -2,8 +2,8 @@ name: default
 
 tasks:
   datastore:
-    embedding: true
-    index: false
+    embedding: false
+    index: true
   eval: 
     task_name: gen  # task name is used to load the eval data. Options:["perplexity", "lm-eval"].
     search: false  # search top-k offline
