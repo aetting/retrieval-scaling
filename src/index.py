@@ -120,7 +120,6 @@ class Indexer(object):
             client = boto3.client('s3')
             m = re.match("s3://([^/]+)/(.*)",dir_path)
             bucket, filedir = m.groups()[0],m.groups()[1]
-            import pdb; pdb.set_trace()
             client.put_object(Body=index_file, Bucket=bucket, Key=f"{filedir}/index.faiss")
             # os.deletedir
 
