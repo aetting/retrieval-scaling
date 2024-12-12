@@ -338,7 +338,7 @@ def search_dense_topk(cfg):
                 tmp_dir_path = Path("tmp")
             tmp_dir_path.mkdir(parents=True, exist_ok=True)
             index.deserialize_from(index_dir,tmp_path=tmp_dir_path)
-            # shutil.rmtree(tmp_dir_path)
+            shutil.rmtree(tmp_dir_path)
         else:
             index.deserialize_from(index_dir)
 
