@@ -468,7 +468,6 @@ def get_index_passages_and_id_map(cfg, index_shard_ids=None):
             print(psg_filepath)
             shard_passages = fast_load_jsonl(psg_filepath)
             shard_id_map = {str(x["id"]+offset): x for x in shard_passages}
-            import pdb; pdb.set_trace()
             
             offset += len(shard_passages)
             passages.extend(shard_passages)
