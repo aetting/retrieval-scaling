@@ -23,7 +23,7 @@ gantry run \
     --priority "${PRIORITY}" \
     --leader-selection \
     --gpus 1 \
-    --replicas 2 \
+    --replicas 4 \
     --preemptible \
     --cluster "${CLUSTER}" \
     --budget ai2/oe-data \
