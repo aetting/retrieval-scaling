@@ -23,7 +23,7 @@ gantry run \
     --priority "${PRIORITY}" \
     --leader-selection \
     --gpus 1 \
-    --replicas 1 \
+    --replicas 2 \
     --preemptible \
     --cluster "${CLUSTER}" \
     --budget ai2/oe-data \
@@ -35,4 +35,4 @@ gantry run \
     --env-secret WANDB_API_KEY=WANDB_API_KEY \
     --shared-memory 10GiB \
     --yes \
-    -- python -m ric.main_ric --config-name example_config
+    -- python -m ric.main_ric --config-name example_config tasks.datastore.embedding=true
