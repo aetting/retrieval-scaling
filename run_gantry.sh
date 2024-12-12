@@ -35,4 +35,4 @@ gantry run \
     --env-secret WANDB_API_KEY=WANDB_API_KEY \
     --shared-memory 10GiB \
     --yes \
-    -- ./run_embedding.sh
+    -- python -m ric.main_ric --config-name example_config
