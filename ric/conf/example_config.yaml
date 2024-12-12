@@ -93,7 +93,7 @@ evaluation:
   data:
     # eval_data: "/net/nfs.cirrascale/allennlp/allysone/reddit/mmlu/mmlu_queries/test_queries/mmlu_queries_corr/global_facts_test.jsonl"
     # eval_data: "s3://ai2-llm/pretraining-data/sources/reddit/dolma_raw/mmlu_queries/test_queries/mmlu_queries_corr/global_facts_test.jsonl"
-    eval_data: /net/nfs.cirrascale/allennlp/allysone/reddit/query_lib/sanity_check.jsonl
+    eval_data: s3://ai2-llm/pretraining-data/sources/reddit/dolma_raw/mmlu_queries/sanity_check.jsonl
     max_eval_data_seq_length: 1024
     eval_stride: 512
     merge: True
