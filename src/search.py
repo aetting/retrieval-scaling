@@ -36,7 +36,7 @@ from contriever.src.evaluation import calculate_matches
 import contriever.src.normalize_text
 
 from src.data import load_eval_data
-from src.index import Indexer, get_index_dir_and_passage_paths, get_index_passages_and_id_map, get_bm25_index_dir
+from src.index import Indexer, get_index_dir_and_passage_paths, get_index_passages_and_id_map, get_bm25_index_dir, get_glob_flex
 from src.decontamination import check_below_lexical_overlap_threshold
 try:
     from utils.deduplication import remove_duplicates_with_minhash, multiprocess_deduplication
@@ -153,9 +153,9 @@ def add_hasanswer(data, hasanswer):
             d["hasanswer"] = hasanswer[i][k]
 
 
-def get_search_output_path(cfg):
+def get_search_output_path(cfg, index_shard_id):
     eval_args = cfg.evaluation
-    shards_postfix = "all_shards"
+    shards_postfix = f"shard_{index_shard_id}"
     output_dir = os.path.join(eval_args.eval_output_dir, shards_postfix)
     output_path = os.path.join(output_dir, os.path.basename(eval_args.data.eval_data).replace('.jsonl', '_retrieved_results.jsonl'))
     # if index_shard_ids == [-1]:
@@ -178,13 +178,17 @@ def get_merged_search_output_path(cfg):
     #     print(f"Single-index mode: building a single index over {index_args.index_shard_ids} shards...")
     #     index_shard_ids_list = [index_args.index_shard_ids]
     
-    merged_postfix = ''
-    # for index_shard_ids in sorted(index_shard_ids_list, key=lambda x: int(x[0])):
-    for rank,index_shard_ids in enumerate(index_shard_ids_list):
-        shards_postfix = str(rank) + "-" + '_'.join([str(shard_id) for shard_id in index_shard_ids])
-        merged_postfix += '-' + shards_postfix
-    merged_postfix = merged_postfix.strip('-')
+    # merged_postfix = ''
+    # # for index_shard_ids in sorted(index_shard_ids_list, key=lambda x: int(x[0])):
+    # for rank,index_shard_ids in enumerate(index_shard_ids_list):
+    #     shards_postfix = str(rank) + "-" + '_'.join([str(shard_id) for shard_id in index_shard_ids])
+    #     merged_postfix += '-' + shards_postfix
+    # merged_postfix = merged_postfix.strip('-')
 
+    # output_dir = os.path.join(eval_args.eval_output_dir, merged_postfix)
+    # output_path = os.path.join(output_dir, os.path.basename(eval_args.data.eval_data).replace('.jsonl', '_retrieved_results.jsonl'))
+    eval_args = cfg.evaluation
+    merged_postfix = f"merged"
     output_dir = os.path.join(eval_args.eval_output_dir, merged_postfix)
     output_path = os.path.join(output_dir, os.path.basename(eval_args.data.eval_data).replace('.jsonl', '_retrieved_results.jsonl'))
     return output_path
@@ -230,14 +234,13 @@ def search_dense_topk(cfg):
     #     print(f"Single-index mode: building a single index over {index_args.index_shard_ids} shards...")
     #     index_shard_ids_list = [index_args.index_shard_ids]
 
-    all_exist = True
+    all_exist = False
     # for rank, index_shard_ids in enumerate(index_shard_ids_list):
     #     # check if all search results exist
     #     output_path = get_search_output_path(cfg, rank, index_shard_ids)
     #     all_exist = all_exist and os.path.exists(output_path)
 
-    output_path = get_search_output_path(cfg)
-    all_exist = all_exist and os.path.exists(output_path)
+    # all_exist = all_exist and os.path.exists(output_path)
     
     if all_exist and not eval_args.search.overwrite:
         logging.info(f'Search results exist, skipping searching.')
@@ -320,47 +323,59 @@ def search_dense_topk(cfg):
         #         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         #         safe_write_jsonl(copied_data, output_path)
 
-        output_path = get_search_output_path(cfg)
+        # output_path = get_search_output_path(cfg)
         
         # if os.path.exists(output_path) and not eval_args.search.overwrite:
         #     logging.info(f'{output_path} exists, skipping searching.')
 
         # else:
-        copied_data = copy.deepcopy(data) 
+        
+        all_psg_paths = get_glob_flex(os.path.join(embedding_args.passages_dir,"*.pkl"))
+        all_psg_paths = sorted(all_psg_paths, key=lambda x: x.split('/')[-1].split(f'{embedding_args.prefix}_')[-1].split('.pkl')[0])
+        num_files = index_args.max_files_per_index_shard if index_args.get("max_files_per_index_shard",None) else len(all_psg_paths)
+        start_list = range(0,len(all_psg_paths),num_files)
+        for index_shard_id, shard_start in enumerate(start_list):
+            copied_data = copy.deepcopy(data) 
 
-        index_dir, _ = get_index_dir_and_passage_paths(cfg)
-        index = Indexer(index_args.projection_size, index_args.n_subquantizers, index_args.n_bits)
+            output_path = get_search_output_path(cfg, index_shard_id)
 
-        if "s3://" in index_dir:
-            if index_args.get("tmp_dir",None):
-                tmp_dir_path = Path(os.path.join(index_args.tmp_dir,"tmp"))
-            else:
-                tmp_dir_path = Path("tmp")
-            tmp_dir_path.mkdir(parents=True, exist_ok=True)
-            index.deserialize_from(index_dir,tmp_path=tmp_dir_path)
-            # shutil.rmtree(tmp_dir_path)
-        else:
+            # index_dir, _ = get_index_dir_and_passage_paths(cfg)
+            psg_paths = all_psg_paths[shard_start:shard_start+num_files]
+            index_dir = os.path.join(embedding_args.embedding_dir, f'index/shard_{index_shard_id}')
+            index = Indexer(index_args.projection_size, index_args.n_subquantizers, index_args.n_bits)
             index.deserialize_from(index_dir)
 
-        # load passages and id mapping corresponding to the index
-        passages, passage_id_map = get_index_passages_and_id_map(cfg)
-        assert len(passages) == index.index.ntotal, f"number of documents {len(passages)} and number of embeddings {index.index.ntotal} mismatch"
+            # if "s3://" in index_dir:
+            #     if index_args.get("tmp_dir",None):
+            #         tmp_dir_path = Path(os.path.join(index_args.tmp_dir,"tmp"))
+            #     else:
+            #         tmp_dir_path = Path("tmp")
+            #     tmp_dir_path.mkdir(parents=True, exist_ok=True)
+            #     index.deserialize_from(index_dir,tmp_path=tmp_dir_path)
+            #     # shutil.rmtree(tmp_dir_path)
+            # else:
+            #     index.deserialize_from(index_dir)
 
-        # get top k results
-        start_time_retrieval = time.time()
+            # load passages and id mapping corresponding to the index
+            passages, passage_id_map = get_index_passages_and_id_map(cfg,psg_paths)
+            assert len(passages) == index.index.ntotal, f"number of documents {len(passages)} and number of embeddings {index.index.ntotal} mismatch"
 
-        top_ids_and_scores = index.search_knn(questions_embedding, eval_args.search.n_docs)
-        logging.info(f"Search time: {time.time()-start_time_retrieval:.1f} s.")
+            # get top k results
+            start_time_retrieval = time.time()
 
-        # todo: double check valid_query_idx
-        logging.info(f"Adding documents to eval data...")
-        add_passages(copied_data, passage_id_map, top_ids_and_scores, valid_query_idx, embedding_args, domain=ds_domain)
-        
-        if "s3://" not in output_path:
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        safe_write_jsonl(copied_data, output_path)
+            top_ids_and_scores = index.search_knn(questions_embedding, eval_args.search.n_docs)
+            logging.info(f"Search time: {time.time()-start_time_retrieval:.1f} s.")
+
+            # todo: double check valid_query_idx
+            logging.info(f"Adding documents to eval data...")
+            add_passages(copied_data, passage_id_map, top_ids_and_scores, valid_query_idx, embedding_args, domain=ds_domain)
+            
+            if "s3://" not in output_path:
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            safe_write_jsonl(copied_data, output_path)
         
     
+    post_hoc_merge_topk(cfg)
     # if cfg.evaluation.search.get('merge_multi_source_results', False) and cfg.evaluation.search.get("topk_subsample_p", None):
     #     post_hoc_merge_topk_multi_domain(cfg)
 
@@ -373,21 +388,25 @@ def post_hoc_merge_topk(cfg):
     Post hoc merge the searched results obtained by multiple indices.
     """
     index_args = cfg.datastore.index
+    embedding_args = cfg.datastore.embedding
     output_path = get_merged_search_output_path(cfg)
-    if os.path.exists(output_path) and not cfg.evaluation.search.overwrite:
-        print(f"The merged path exists, skipping...\n{output_path}")
-        return
+    # if os.path.exists(output_path) and not cfg.evaluation.search.overwrite:
+    #     print(f"The merged path exists, skipping...\n{output_path}")
+    #     return
 
-    if isinstance(index_args.index_shard_ids[0], ListConfig) and len(index_args.index_shard_ids) > 1:
-        print(f"Multi-index mode: building {len(index_args.index_shard_ids)} index for {index_args.index_shard_ids} sequentially...")
-        index_shard_ids_list = index_args.index_shard_ids
-    else:
-        print(f"Single-index mode: no need to merge")
-        return
+    # if isinstance(index_args.index_shard_ids[0], ListConfig) and len(index_args.index_shard_ids) > 1:
+    #     print(f"Multi-index mode: building {len(index_args.index_shard_ids)} index for {index_args.index_shard_ids} sequentially...")
+    #     index_shard_ids_list = index_args.index_shard_ids
+    # else:
+    #     print(f"Single-index mode: no need to merge")
+    #     return
     
     merged_data = []
-    for i, index_shard_ids in enumerate(index_shard_ids_list):
-        path_to_merge = get_search_output_path(cfg, i, index_shard_ids)
+    index_overall_dir = os.path.join(embedding_args.embedding_dir, f"index")
+    num_index_shards = len(os.listdir(index_overall_dir))
+    for index_shard_id in range(num_index_shards):
+    # for i, index_shard_ids in enumerate(index_shard_ids_list):
+        path_to_merge = get_search_output_path(cfg, index_shard_id)
         print(f"Adding {path_to_merge}")
         
         data_to_merge = []
@@ -409,7 +428,7 @@ def post_hoc_merge_topk(cfg):
                 _ex['ctxs'] = ctxs
                 data_to_merge.append(_ex)
         
-        if i == 0:
+        if index_shard_id == 0:
             merged_data = data_to_merge
         
         else:

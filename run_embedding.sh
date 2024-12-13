@@ -4,7 +4,11 @@
 
 # BEAKER_REPLICA_RANK=1 BEAKER_REPLICA_COUNT=2 python -m ric.main_ric --config-name example_config
 
-BEAKER_REPLICA_RANK=0 BEAKER_REPLICA_COUNT=1 python -m ric.main_ric --config-name example_config tasks.datastore.embedding=true
+# BEAKER_REPLICA_RANK=3 BEAKER_REPLICA_COUNT=4 python -m ric.main_ric --config-name example_config tasks.datastore.embedding=true
+
+# python -m ric.main_ric --config-name example_config tasks.datastore.index=true
+
+python -m ric.main_ric --config-name example_config tasks.eval.search=true
 
 # export PYTHONPATH=.
 
