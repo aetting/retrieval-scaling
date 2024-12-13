@@ -36,4 +36,4 @@ gantry run \
     --shared-memory 10GiB \
     --weka oe-data-default:/data \
     --yes \
-    -- python -m ric.main_ric --config-name example_config tasks.datastore.index=true
+    -- python -m ric.main_ric --config-name example_config tasks.datastore.index=true tasks.eval.search=true
