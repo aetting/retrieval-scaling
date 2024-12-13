@@ -408,7 +408,6 @@ def build_dense_index(cfg):
     all_embedding_paths = sorted(all_embedding_paths, key=lambda x: int(x.split('/')[-1].split(f'{embedding_args.prefix}')[-1].split('.pkl')[0]))
     num_files = index_args.max_files_per_index_shard if index_args.get("max_files_per_index_shard",None) else len(all_embedding_paths)
     start_list = range(0,len(all_embedding_paths),num_files)
-    import pdb; pdb.set_trace()
     for index_shard_id, shard_start in enumerate(start_list):
         # todo: support PQIVF
         index = Indexer(index_args.projection_size, index_args.n_subquantizers, index_args.n_bits)
