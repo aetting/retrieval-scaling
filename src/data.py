@@ -81,14 +81,74 @@ def fast_load_jsonl_shard(args,file_paths,file_sizes,rank,shard_index, shard_siz
     idx = 0
     for file_path, start_in_file, end_in_file in shard_files:
         # with smart_open.open(f"s3://{bucket}/{okey}") as f:
+        if ".gz" in file_path:
+            file = gzip.open(file_path, 'r', encoding='utf-8')
+        else:
+            file = smart_open.open(file_path, 'r', encoding='utf-8')
+        file.seek(int(start_in_file))
+        # Skip the rest of the partial line after seeking, if not at the start of the file
+        if start_in_file != 0:
+            file.readline()
+        
+        while file.tell() < end_in_file:
+            line = file.readline().strip()
+            if line:
+                ex = json.loads(line)
+                chunks = split_data_into_chunks(ex['text'].strip(), chunk_sz, min_chunk_sz, keep_last)
+                for chunk in chunks:
+                    pass_dict = {
+                        "text": chunk,
+                        "id": idx,
+                        "shard_id": shard_index,
+                        "num_shards": num_shards,
+                    }
+                    for added_field in args.fields_to_add:
+                        pass_dict[added_field] = ex[added_field]
+                    passages.append(pass_dict)
+                    idx += 1
+            else:
+                break
+        file.close()
+    
+    if args.get('passages_dir', None):
+        os.makedirs(args.passages_dir, exist_ok=True)
+        with smart_open.open(passage_shard_save_path, 'wb') as file:
+            pickle.dump(passages, file)
+
+    return passages
+
+def fast_load_jsonl_shard_full_files(args,file_paths,file_sizes,rank,shard_index, shard_start, num_files, num_shards):
+    """
+    This function is designed to handle large datasets by only loading the specific portion of data (shard) that 
+    corresponds to the given shard index.
+
+    Shards are determined by dividing the total size of all files in the directory evenly by `num_shards`. 
+    This function reads only the data portion of the `shard_index` shard, chunks the text from each line 
+    based on `chunk_sz`, and appends each chunk to a list with an incremental ID.
+    """
+    raw_data_path = args.raw_data_path
+    # num_shards = args.num_shards if args.num_shards else None
+    chunk_sz = args.chunk_size
+    min_chunk_sz = args.get('min_chunk_sz', 0)
+    keep_last = args.get('keep_last_chunk', True)
+
+    passage_shard_save_path = os.path.join(args.passages_dir, f'raw_passages_{rank}-{shard_index}-of-{num_shards}.pkl')
+    
+    passages = []
+    idx = 0
+    print()
+    print(shard_index)
+    for file_path in file_paths[shard_start:shard_start+num_files]:
+        print(file_path)
+        # with smart_open.open(f"s3://{bucket}/{okey}") as f:
+        # if ".gz" in file_path:
+        #     file = gzip.open(file_path)
+        # else:
+        #     file = smart_open.open(file_path, 'r', encoding='utf-8')
+        # file = smart_open.open(file_path, 'r', encoding='utf-8')
         with smart_open.open(file_path, 'r', encoding='utf-8') as file:
-            file.seek(int(start_in_file))
-            # Skip the rest of the partial line after seeking, if not at the start of the file
-            if start_in_file != 0:
-                file.readline()
-            
-            while file.tell() < end_in_file:
-                line = file.readline().strip()
+            for line in file:
+                line = line.strip()
                 if line:
                     ex = json.loads(line)
                     chunks = split_data_into_chunks(ex['text'].strip(), chunk_sz, min_chunk_sz, keep_last)
@@ -103,8 +163,6 @@ def fast_load_jsonl_shard(args,file_paths,file_sizes,rank,shard_index, shard_siz
                             pass_dict[added_field] = ex[added_field]
                         passages.append(pass_dict)
                         idx += 1
-                else:
-                    break
     
     if args.get('passages_dir', None):
         os.makedirs(args.passages_dir, exist_ok=True)

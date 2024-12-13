@@ -15,6 +15,7 @@ import math
 import boto3
 import smart_open
 import json
+import gzip
 
 from pathlib import Path
 
@@ -26,7 +27,7 @@ import contriever.src.contriever
 import contriever.src.utils
 import contriever.src.normalize_text
 
-from src.data import fast_load_jsonl_shard
+from src.data import fast_load_jsonl_shard, fast_load_jsonl_shard_full_files
 
 
 def embed_passages(args, passages, model, tokenizer):
@@ -143,16 +144,23 @@ def get_file_paths_and_sizes(args):
         for page in pages:
             for obj in page["Contents"]:
                 okey = obj["Key"]
+                print(okey)
                 if "json" not in okey:
                     continue
                 filepath = f"s3://{bucket}/{okey}"
                 file_paths.append(filepath)
-                file_sizes.append(obj["Size"])
+                # if ".gz" in okey:
+                #     s3 = boto3.resource("s3")
+                #     getobj = s3.Object(bucket, okey)
+                #     with gzip.GzipFile(fileobj=getobj.get()["Body"]) as gzipfile:
+                #         file_sizes.append(gzipfile.seek(0,2))
+                # else:
+                #     file_sizes.append(obj["Size"])
 
     else:
         for file in os.listdir(args.raw_data_path):
             file_paths.append(os.path.join(args.raw_data_path, file))
-            file_sizes.append(os.path.getsize(file_path))
+            # file_sizes.append(os.path.getsize(file_path))
 
     return file_paths,file_sizes
 
@@ -196,9 +204,9 @@ def generate_passage_embeddings(cfg):
             print(f"{args.model_name_or_path} is not supported!")
             raise AttributeError
         
-        arg_num_shards = args.get("num_shards",None)
-        arg_max_shard_size = args.get("max_shard_size",None)
-        assert sum([bool(arg_num_shards),bool(arg_max_shard_size)]) == 1 , "Specify either datastore.embedding.num_shards or datastore.embedding.max_shard_size, but not both"
+        # arg_num_shards = args.get("num_shards",None)
+        # arg_max_shard_size = args.get("max_shard_size",None)
+        # assert sum([bool(arg_num_shards),bool(arg_max_shard_size)]) == 1 , "Specify either datastore.embedding.num_shards or datastore.embedding.max_shard_size, but not both"
         
         model.eval()
         model = model.cuda()
@@ -226,24 +234,26 @@ def generate_passage_embeddings(cfg):
 
         # num_shards,shard_size = get_shard_specs(args, partition_file_list)
         partition_file_paths,partition_file_sizes,rank = get_file_partitions(args)
-        num_shards,shard_size = get_shard_specs(args, partition_file_paths,partition_file_sizes)
+        # num_shards,shard_size = get_shard_specs(args, partition_file_paths,partition_file_sizes)
 
         # shard_ids = [int(i) for i in args.shard_ids]
-        shard_ids = range(num_shards)
 
         #TODO
         #for simplicity maybe just
         #num_shards = len(source_paths)/2
         #shard_ids = range(num_shards)
+        num_files = args.max_files_per_shard if args.get("max_files_per_shard",None) else len(partition_file_paths)
+        start_list = range(0,len(partition_file_paths),num_files)
+        num_shards = len(start_list)
 
-        for shard_id in shard_ids:
+        for shard_id, shard_start in enumerate(start_list):
             embedding_shard_save_path = os.path.join(args.embedding_dir, args.prefix + f"{rank}_{shard_id:02d}.pkl")
             
             if os.path.exists(embedding_shard_save_path) and args.get("use_saved_if_exists", "true"):
                 print(f"Embeddings exist in {embedding_shard_save_path}")
                 continue
             
-            shard_passages = fast_load_jsonl_shard(args, partition_file_paths, partition_file_sizes, rank, shard_id, shard_size, num_shards)
+            shard_passages = fast_load_jsonl_shard_full_files(args, partition_file_paths, partition_file_sizes, rank, shard_id, shard_start, num_files, num_shards)
             if args.get("logloc",None):
                 logpath = Path(args.logloc)
                 logpath.mkdir(parents=True, exist_ok=True)
