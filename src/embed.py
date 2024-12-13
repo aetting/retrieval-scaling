@@ -14,6 +14,9 @@ import math
 
 import boto3
 import smart_open
+import json
+
+from pathlib import Path
 
 from transformers import AutoTokenizer, AutoModel
 from sentence_transformers import SentenceTransformer
@@ -241,9 +244,14 @@ def generate_passage_embeddings(cfg):
                 continue
             
             shard_passages = fast_load_jsonl_shard(args, partition_file_paths, partition_file_sizes, rank, shard_id, shard_size, num_shards)
-            print(f"\n\nSHARD {shard_id}\n\n")
-            print(shard_passages[0])
-            print(shard_passages[-1])
+            if args.get("logloc",None):
+                logpath = Path(args.logloc)
+                logpath.mkdir(parents=True, exist_ok=True)
+                with open(os.path.join(args.logloc,f"{rank}_{shard_id:02d}.json"),"w") as logout:
+                    logout.write(json.dumps(shard_passages,indent=4))
+                    # logout.write(f"\n\nSHARD {shard_id}\n\n")
+                    # logout.write(shard_passages[0] + "\n")
+                    # logout.write(shard_passages[-1] + "\n")
 
             allids, allembeddings = embed_passages(args, shard_passages, model, tokenizer)
 

@@ -47,6 +47,7 @@ datastore:
     lowercase: False
     normalize_text: False
     fields_to_add: ["subreddit"]
+    logloc: /output
 
 
     prefix: "passages"
