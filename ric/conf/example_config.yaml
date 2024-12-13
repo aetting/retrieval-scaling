@@ -54,7 +54,7 @@ datastore:
     prefix: "passages"
     # embedding_dir: /net/nfs.cirrascale/allennlp/allysone/reddit/scaling_out_mini/embeddings/${model.datastore_encoder}/${datastore.domain}
     embedding_dir: ${datastore.embedding.output_dir}/embeddings/${model.datastore_encoder}/${datastore.domain}
-    use_saved_if_exists: true
+    use_saved_if_exists: false
 
   index:
     raw_data_path: ${datastore.raw_data_path}
