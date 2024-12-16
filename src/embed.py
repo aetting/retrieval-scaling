@@ -138,12 +138,12 @@ def get_file_paths_and_sizes(args):
                     continue
                 filepath = f"s3://{bucket}/{okey}"
                 file_paths.append(filepath)
-                file_sizes.append(obj["Size"])
+                # file_sizes.append(obj["Size"])
 
     else:
         for file in os.listdir(args.raw_data_path):
             file_paths.append(os.path.join(args.raw_data_path, file))
-            file_sizes.append(os.path.getsize(file_path))
+            # file_sizes.append(os.path.getsize(file_path))
 
     return file_paths,file_sizes
 
