@@ -153,11 +153,11 @@ def add_hasanswer(data, hasanswer):
             d["hasanswer"] = hasanswer[i][k]
 
 
-def get_search_output_path(cfg, index_shard_id):
+def get_search_output_path(cfg, query_filepath, index_shard_id):
     eval_args = cfg.evaluation
     shards_postfix = f"shard_{index_shard_id}"
     output_dir = os.path.join(eval_args.eval_output_dir, shards_postfix)
-    output_path = os.path.join(output_dir, os.path.basename(eval_args.data.eval_data).replace('.jsonl', '_retrieved_results.jsonl'))
+    output_path = os.path.join(output_dir, os.path.basename(query_filepath).replace('.jsonl', '_retrieved_results.jsonl'))
     # if index_shard_ids == [-1]:
     #     shards_postfix = "all_shards"
     # else:
@@ -167,7 +167,7 @@ def get_search_output_path(cfg, index_shard_id):
     return output_path
 
 
-def get_merged_search_output_path(cfg):
+def get_merged_search_output_path(cfg, query_filepath):
     index_args = cfg.datastore.index
     eval_args = cfg.evaluation
 
@@ -190,7 +190,7 @@ def get_merged_search_output_path(cfg):
     eval_args = cfg.evaluation
     merged_postfix = f"merged"
     output_dir = os.path.join(eval_args.eval_output_dir, merged_postfix)
-    output_path = os.path.join(output_dir, os.path.basename(eval_args.data.eval_data).replace('.jsonl', '_retrieved_results.jsonl'))
+    output_path = os.path.join(output_dir, os.path.basename(query_filepath).replace('.jsonl', '_retrieved_results.jsonl'))
     return output_path
 
 
@@ -221,7 +221,7 @@ def get_merged_subsampled_search_output_path(cfg):
     return output_path
 
 
-def search_dense_topk(cfg):
+def search_dense_topk(cfg, query_filepath):
     index_args = cfg.datastore.index
     eval_args = cfg.evaluation
     ds_domain = cfg.datastore.domain
@@ -268,7 +268,7 @@ def search_dense_topk(cfg):
             query_encoder = query_encoder.half()
         
         # load eval data
-        data = load_eval_data(cfg)
+        data = load_eval_data(cfg,query_filepath)
         
         # if eval_args.data.num_eval_samples is not None:
         #     random.seed(eval_args.data.seed)
@@ -337,7 +337,7 @@ def search_dense_topk(cfg):
         for index_shard_id, shard_start in enumerate(start_list):
             copied_data = copy.deepcopy(data) 
 
-            output_path = get_search_output_path(cfg, index_shard_id)
+            output_path = get_search_output_path(cfg, query_filepath, index_shard_id)
 
             # index_dir, _ = get_index_dir_and_passage_paths(cfg)
             psg_paths = all_psg_paths[shard_start:shard_start+num_files]
@@ -375,7 +375,7 @@ def search_dense_topk(cfg):
             safe_write_jsonl(copied_data, output_path)
         
     
-    post_hoc_merge_topk(cfg)
+    post_hoc_merge_topk(cfg,query_filepath)
     # if cfg.evaluation.search.get('merge_multi_source_results', False) and cfg.evaluation.search.get("topk_subsample_p", None):
     #     post_hoc_merge_topk_multi_domain(cfg)
 
@@ -383,13 +383,13 @@ def search_dense_topk(cfg):
     #     post_hoc_merge_topk(cfg)
     
 
-def post_hoc_merge_topk(cfg):
+def post_hoc_merge_topk(cfg,query_filepath):
     """
     Post hoc merge the searched results obtained by multiple indices.
     """
     index_args = cfg.datastore.index
     embedding_args = cfg.datastore.embedding
-    output_path = get_merged_search_output_path(cfg)
+    output_path = get_merged_search_output_path(cfg,query_filepath)
     # if os.path.exists(output_path) and not cfg.evaluation.search.overwrite:
     #     print(f"The merged path exists, skipping...\n{output_path}")
     #     return
@@ -406,7 +406,7 @@ def post_hoc_merge_topk(cfg):
     num_index_shards = len(os.listdir(index_overall_dir))
     for index_shard_id in range(num_index_shards):
     # for i, index_shard_ids in enumerate(index_shard_ids_list):
-        path_to_merge = get_search_output_path(cfg, index_shard_id)
+        path_to_merge = get_search_output_path(cfg, query_filepath, index_shard_id)
         print(f"Adding {path_to_merge}")
         
         data_to_merge = []
@@ -921,4 +921,6 @@ def search_topk(cfg):
     if cfg.model.get("sparse_retriever", None):
         search_sparse_topk(cfg)
     else:
-        search_dense_topk(cfg)
+        for query_file in get_glob_flex(cfg.evaluation.data.eval_data):
+            print(f"\nSearching on queries in {query_file}")
+            search_dense_topk(cfg,query_file)

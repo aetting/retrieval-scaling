@@ -286,17 +286,17 @@ def split_data_into_chunks(text, chunk_sz, min_chunk_sz, keep_last):
 
 
 ############################## Evaluation ##############################
-def load_eval_data(cfg):
-    path = cfg.evaluation.data.eval_data
+def load_eval_data(cfg, data_filepath):
+    # path = cfg.evaluation.data.eval_data
     task_name = cfg.tasks.eval.task_name
     
     # use lm_tokenizer to make sure the number of tokens consitent with the ones for PPL computation
     tokenizer = transformers.AutoTokenizer.from_pretrained(cfg.model.lm_model)
 
-    if path.endswith('.jsonl'):
-        data = load_jsonl(path)    # 'text', 'meta'
-    elif path.endswith('.parquet'):
-        data = load_parquet(path)
+    if data_filepath.endswith('.jsonl'):
+        data = load_jsonl(data_filepath)    # 'text', 'meta'
+    elif data_filepath.endswith('.parquet'):
+        data = load_parquet(data_filepath)
     
     if task_name == 'perplexity':
         eval_data_args = cfg.evaluation.data
