@@ -204,6 +204,7 @@ def generate_passage_embeddings(cfg):
         num_shards = len(start_list)
 
         for shard_id, shard_start in enumerate(start_list):
+            print(f"Processing EMBEDDING SHARD {shard_id} out of {num_shards} shards (for worker {rank})")
             embedding_shard_save_path = os.path.join(args.embedding_dir, args.prefix + f"{rank}_{shard_id:02d}.pkl")
             
             if os.path.exists(embedding_shard_save_path) and args.get("use_saved_if_exists", "true"):
