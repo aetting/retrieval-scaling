@@ -52,6 +52,7 @@ def embed_passages(args, passages, model, tokenizer):
         total = 0
         allids, allembeddings = [], []
         batch_ids, batch_text = [], []
+        tot_psgs = len(passages)
         with torch.no_grad():
             for k, p in tqdm(enumerate(passages)):
                 batch_ids.append(p["id"])
@@ -65,8 +66,9 @@ def embed_passages(args, passages, model, tokenizer):
                     text = contriever.src.normalize_text.normalize(text)
                 batch_text.append(text)
 
-                if len(batch_text) == args.per_gpu_batch_size or k == len(passages) - 1:
+                if len(batch_text) == args.per_gpu_batch_size or k == tot_psgs - 1:
 
+                    print(f"\nEMBEDDING UP TO PSG {k} of {tot_psgs}")
                     encoded_batch = tokenizer.batch_encode_plus(
                         batch_text,
                         return_tensors="pt",
@@ -84,17 +86,19 @@ def embed_passages(args, passages, model, tokenizer):
                     embeddings = embeddings.cpu()
                     
                     total += len(batch_ids)
-                    allids.extend(batch_ids)
-                    allembeddings.append(embeddings)
+                    # allids.extend(batch_ids)
+                    # allembeddings.append(embeddings)
+
+                    yield batch_ids,embeddings.numpy()
 
                     batch_text = []
                     batch_ids = []
                     if k % 10000 == 0 and k > 0:
                         print(f"Encoded passages {total}")
         
-        allembeddings = torch.cat(allembeddings, dim=0).numpy()
+        # allembeddings = torch.cat(allembeddings, dim=0).numpy()
     
-    return allids, allembeddings
+    # return allids, allembeddings
 
 
 def get_sharded_passages(args, all_passages):
@@ -218,14 +222,15 @@ def generate_passage_embeddings(cfg):
                 with open(os.path.join(args.logloc,f"{rank}_{shard_id:02d}.json"),"w") as logout:
                     logout.write(json.dumps(shard_passages,indent=4))
 
-            allids, allembeddings = embed_passages(args, shard_passages, model, tokenizer)
-
+            tot_shard_embeddings = 0
             os.makedirs(args.embedding_dir, exist_ok=True)
-            print(f"Saving {len(allids)} passage embeddings to {embedding_shard_save_path}.")
+            print(f"Saving passage embeddings to {embedding_shard_save_path}.")
             with smart_open.open(embedding_shard_save_path, mode="wb") as file:
-                pickle.dump((allids, allembeddings), file)
+                for batchids, batchembeddings in embed_passages(args, shard_passages, model, tokenizer):
+                    tot_shard_embeddings += len(batchids)
+                    pickle.dump((batchids, batchembeddings), file)
 
-            print(f"Processed {len(allids)} passages in the {shard_id}-th (out of {num_shards}) shard.\nWritten to {embedding_shard_save_path}.")
+            print(f"Processed {tot_shard_embeddings} passages in the {shard_id}-th (out of {num_shards}) shard.\nWritten to {embedding_shard_save_path}.")
 
 
 if __name__ == "__main__":

@@ -322,31 +322,38 @@ def get_index_dir_and_passage_paths(cfg,index_shard_id, shard_start, num_files):
     
     return index_dir, embedding_paths
 
-
+def pickle_loader(inputfile):
+    try:
+        while True:
+            yield pickle.load(inputfile)
+    except EOFError:
+        pass
 
 def index_encoded_data(index, embedding_paths, indexing_batch_size):
-    allids = []
-    allembeddings = np.array([])
+    # allids = []
+    # allembeddings = np.array([])
 
     id_offset = 0  
     for i, file_path in enumerate(embedding_paths):
         print(f"Loading file {file_path}")
+        fileids = []
+        fileembeddings = np.array([])
         with smart_open.open(file_path, "rb") as fin:
-            ids, embeddings = pickle.load(fin)
+            for ids, embeddings in pickle_loader(fin):
         
-        assert min(ids)==0, f'Passage ids start with {min(ids)}, not 0: {file_path}'
-        # each embedding shard's ids start with 0, so need to accumulate the id offset
-        ids = [id + id_offset for id in ids]
-        id_offset = max(ids) + 1
+                # assert min(ids)==0, f'Passage ids start with {min(ids)}, not 0: {file_path}'
+                # each embedding shard's ids start with 0, so need to accumulate the id offset
+                ids = [id + id_offset for id in ids]
 
-        allembeddings = np.vstack((allembeddings, embeddings)) if allembeddings.size else embeddings
-        allids.extend(ids)
+                fileembeddings = np.vstack((fileembeddings, embeddings)) if fileembeddings.size else embeddings
+                fileids.extend(ids)
+                
+                while fileembeddings.shape[0] > indexing_batch_size:
+                    fileembeddings, fileids = add_embeddings(index, fileembeddings, fileids, indexing_batch_size)
         
-        while allembeddings.shape[0] > indexing_batch_size:
-            allembeddings, allids = add_embeddings(index, allembeddings, allids, indexing_batch_size)
-        
-    while allembeddings.shape[0] > 0:
-        allembeddings, allids = add_embeddings(index, allembeddings, allids, indexing_batch_size)
+            while fileembeddings.shape[0] > 0:
+                fileembeddings, fileids = add_embeddings(index, fileembeddings, fileids, indexing_batch_size)
+        id_offset = max(ids) + 1
 
     print("Data indexing completed.")
 
