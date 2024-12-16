@@ -158,12 +158,6 @@ def get_search_output_path(cfg, query_filepath, index_shard_id):
     shards_postfix = f"shard_{index_shard_id}"
     output_dir = os.path.join(eval_args.eval_output_dir, shards_postfix)
     output_path = os.path.join(output_dir, os.path.basename(query_filepath).replace('.jsonl', '_retrieved_results.jsonl'))
-    # if index_shard_ids == [-1]:
-    #     shards_postfix = "all_shards"
-    # else:
-    #     shards_postfix = str(rank) + "-" + '_'.join([str(shard_id) for shard_id in index_shard_ids])
-    # output_dir = os.path.join(eval_args.eval_output_dir, shards_postfix)
-    # output_path = os.path.join(output_dir, os.path.basename(eval_args.data.eval_data).replace('.jsonl', '_retrieved_results.jsonl'))
     return output_path
 
 
@@ -171,23 +165,6 @@ def get_merged_search_output_path(cfg, query_filepath):
     index_args = cfg.datastore.index
     eval_args = cfg.evaluation
 
-    # if isinstance(index_args.index_shard_ids[0], ListConfig):
-    #     print(f"Multi-index mode: building {len(index_args.index_shard_ids)} index for {index_args.index_shard_ids} sequentially...")
-    #     index_shard_ids_list = index_args.index_shard_ids
-    # else:
-    #     print(f"Single-index mode: building a single index over {index_args.index_shard_ids} shards...")
-    #     index_shard_ids_list = [index_args.index_shard_ids]
-    
-    # merged_postfix = ''
-    # # for index_shard_ids in sorted(index_shard_ids_list, key=lambda x: int(x[0])):
-    # for rank,index_shard_ids in enumerate(index_shard_ids_list):
-    #     shards_postfix = str(rank) + "-" + '_'.join([str(shard_id) for shard_id in index_shard_ids])
-    #     merged_postfix += '-' + shards_postfix
-    # merged_postfix = merged_postfix.strip('-')
-
-    # output_dir = os.path.join(eval_args.eval_output_dir, merged_postfix)
-    # output_path = os.path.join(output_dir, os.path.basename(eval_args.data.eval_data).replace('.jsonl', '_retrieved_results.jsonl'))
-    eval_args = cfg.evaluation
     merged_postfix = f"merged"
     output_dir = os.path.join(eval_args.eval_output_dir, merged_postfix)
     output_path = os.path.join(output_dir, os.path.basename(query_filepath).replace('.jsonl', '_retrieved_results.jsonl'))
@@ -226,13 +203,6 @@ def search_dense_topk(cfg, query_filepath):
     eval_args = cfg.evaluation
     ds_domain = cfg.datastore.domain
     embedding_args = cfg.datastore.embedding
-
-    # if isinstance(index_args.index_shard_ids[0], ListConfig):
-    #     print(f"Multi-index mode: building {len(index_args.index_shard_ids)} index for {index_args.index_shard_ids} sequentially...")
-    #     index_shard_ids_list = index_args.index_shard_ids
-    # else:
-    #     print(f"Single-index mode: building a single index over {index_args.index_shard_ids} shards...")
-    #     index_shard_ids_list = [index_args.index_shard_ids]
 
     all_exist = False
     # for rank, index_shard_ids in enumerate(index_shard_ids_list):
@@ -292,43 +262,6 @@ def search_dense_topk(cfg, query_filepath):
         if eval_args.search.get('cache_query_embedding_only', False):
             return
 
-        # load index
-        # for rank, index_shard_ids in enumerate(index_shard_ids_list):
-        #     output_path = get_search_output_path(cfg, rank, index_shard_ids)
-            
-        #     if os.path.exists(output_path) and not eval_args.search.overwrite:
-        #         logging.info(f'{output_path} exists, skipping searching.')
-
-        #     else:
-        #         copied_data = copy.deepcopy(data)
-
-        #         index_dir, _ = get_index_dir_and_passage_paths(cfg, rank, index_shard_ids)
-        #         index = Indexer(index_args.projection_size, index_args.n_subquantizers, index_args.n_bits)
-        #         index.deserialize_from(index_dir)
-
-        #         # load passages and id mapping corresponding to the index
-        #         passages, passage_id_map = get_index_passages_and_id_map(cfg, rank, index_shard_ids)
-        #         assert len(passages) == index.index.ntotal, f"number of documents {len(passages)} and number of embeddings {index.index.ntotal} mismatch"
-
-        #         # get top k results
-        #         start_time_retrieval = time.time()
-
-        #         top_ids_and_scores = index.search_knn(questions_embedding, eval_args.search.n_docs)
-        #         logging.info(f"Search time: {time.time()-start_time_retrieval:.1f} s.")
-
-        #         # todo: double check valid_query_idx
-        #         logging.info(f"Adding documents to eval data...")
-        #         add_passages(copied_data, passage_id_map, top_ids_and_scores, valid_query_idx, embedding_args, domain=ds_domain)
-                
-        #         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        #         safe_write_jsonl(copied_data, output_path)
-
-        # output_path = get_search_output_path(cfg)
-        
-        # if os.path.exists(output_path) and not eval_args.search.overwrite:
-        #     logging.info(f'{output_path} exists, skipping searching.')
-
-        # else:
         
         all_psg_paths = get_glob_flex(os.path.join(embedding_args.passages_dir,"*.pkl"))
         all_psg_paths = sorted(all_psg_paths, key=lambda x: x.split('/')[-1].split(f'{embedding_args.prefix}_')[-1].split('.pkl')[0])
@@ -345,16 +278,6 @@ def search_dense_topk(cfg, query_filepath):
             index = Indexer(index_args.projection_size, index_args.n_subquantizers, index_args.n_bits)
             index.deserialize_from(index_dir)
 
-            # if "s3://" in index_dir:
-            #     if index_args.get("tmp_dir",None):
-            #         tmp_dir_path = Path(os.path.join(index_args.tmp_dir,"tmp"))
-            #     else:
-            #         tmp_dir_path = Path("tmp")
-            #     tmp_dir_path.mkdir(parents=True, exist_ok=True)
-            #     index.deserialize_from(index_dir,tmp_path=tmp_dir_path)
-            #     # shutil.rmtree(tmp_dir_path)
-            # else:
-            #     index.deserialize_from(index_dir)
 
             # load passages and id mapping corresponding to the index
             passages, passage_id_map = get_index_passages_and_id_map(cfg,psg_paths)
@@ -393,19 +316,11 @@ def post_hoc_merge_topk(cfg,query_filepath):
     # if os.path.exists(output_path) and not cfg.evaluation.search.overwrite:
     #     print(f"The merged path exists, skipping...\n{output_path}")
     #     return
-
-    # if isinstance(index_args.index_shard_ids[0], ListConfig) and len(index_args.index_shard_ids) > 1:
-    #     print(f"Multi-index mode: building {len(index_args.index_shard_ids)} index for {index_args.index_shard_ids} sequentially...")
-    #     index_shard_ids_list = index_args.index_shard_ids
-    # else:
-    #     print(f"Single-index mode: no need to merge")
-    #     return
     
     merged_data = []
     index_overall_dir = os.path.join(embedding_args.embedding_dir, f"index")
     num_index_shards = len(os.listdir(index_overall_dir))
     for index_shard_id in range(num_index_shards):
-    # for i, index_shard_ids in enumerate(index_shard_ids_list):
         path_to_merge = get_search_output_path(cfg, query_filepath, index_shard_id)
         print(f"Adding {path_to_merge}")
         

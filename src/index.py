@@ -104,42 +104,24 @@ class Indexer(object):
             result.extend([(db_ids[i], scores[i]) for i in range(len(db_ids))])
         return result
 
-    def serialize(self, dir_path, tmp_path = "tmp"):
-        if "s3://" in dir_path:
-            index_file = os.path.join(tmp_path, 'index.faiss')
-            meta_file = os.path.join(tmp_path, 'index_meta.faiss')
-        else:
-            index_file = os.path.join(dir_path, 'index.faiss')
-            meta_file = os.path.join(dir_path, 'index_meta.faiss')
+    def serialize(self, dir_path):
+        index_file = os.path.join(dir_path, 'index.faiss')
+        meta_file = os.path.join(dir_path, 'index_meta.faiss')
         print(f'Serializing index to {index_file}, meta data to {meta_file}')
 
         faiss.write_index(self.index, index_file)
-        with smart_open.open(meta_file, mode='wb') as f:
+        with open(meta_file, mode='wb') as f:
             pickle.dump(self.index_id_to_db_id, f)
-        
-        if "s3://" in dir_path:
-            client = boto3.client('s3')
-            m = re.match("s3://([^/]+)/(.*)",dir_path)
-            bucket, filedir = m.groups()[0],m.groups()[1]
-            client.put_object(Body=index_file, Bucket=bucket, Key=f"{filedir}/index.faiss")
-            client.put_object(Body=meta_file, Bucket=bucket, Key=f"{filedir}/index_meta.faiss")
 
-    def deserialize_from(self, dir_path, tmp_path = "tmp"):
+    def deserialize_from(self, dir_path):
         index_file = os.path.join(dir_path, 'index.faiss')
-        if "s3://" in dir_path:
-            client = boto3.client('s3')
-            m = re.match("s3://([^/]+)/(.*)",index_file)
-            bucket, filepath = m.groups()[0],m.groups()[1]
-            client.download_file(bucket, filepath, os.path.join(tmp_path,"index.faiss"))
-            index_file = os.path.join(tmp_path,"index.faiss")
-
         meta_file = os.path.join(dir_path, 'index_meta.faiss')
         print(f'Loading index from {index_file}, meta data from {meta_file}')
 
         self.index = faiss.read_index(index_file)
         print('Loaded index of type %s and size %d', type(self.index), self.index.ntotal)
 
-        with smart_open.open(meta_file, "rb") as reader:
+        with open(meta_file, "rb") as reader:
             self.index_id_to_db_id = pickle.load(reader)
         assert len(
             self.index_id_to_db_id) == self.index.ntotal, 'Deserialized index_id_to_db_id should match faiss index size'
@@ -330,37 +312,13 @@ def get_index_dir_and_passage_paths(cfg,index_shard_id, shard_start, num_files):
     embedding_args = cfg.datastore.embedding
     index_args = cfg.datastore.index
 
-    # index passages
-    # index_shard_ids = index_shard_ids if index_shard_ids is not None else index_args.get('index_shard_ids', None)
-    # if index_shard_ids and index_shard_ids != [-1]:
-    #     index_shard_ids = [int(i) for i in index_shard_ids]
-    #     embedding_paths = [os.path.join(embedding_args.embedding_dir, embedding_args.prefix + f"{rank}_{shard_id:02d}.pkl")
-    #                    for shard_id in index_shard_ids]
-
-    #     # name the index dir with all shard ids included in this index, i.e., one index for multiple passage shards
-    #     index_dir_name = str(rank) + "-" + '_'.join([str(shard_id) for shard_id in index_shard_ids])
-    #     index_dir = os.path.join(os.path.dirname(embedding_paths[0]), f'index/{index_dir_name}')
-        
-    # else:
-    #     embedding_paths = glob.glob(index_args.passages_embeddings)
-    #     embedding_paths = sorted(embedding_paths, key=lambda x: int(x.split('/')[-1].split(f'{embedding_args.prefix}')[-1].split('.pkl')[0]))  # must sort based on the integer number
-    #     embedding_paths = embedding_paths if index_args.num_subsampled_embedding_files == -1 else embedding_paths[0:index_args.num_subsampled_embedding_files]
-    #     print("EMBEDDINGS")
-    #     print(embedding_paths)
-        
-    #     index_dir = os.path.join(os.path.dirname(embedding_paths[0]), f'index')
-
-    # embedding_paths = glob.glob(index_args.passages_embeddings)
     embedding_paths = get_glob_flex(index_args.passages_embeddings)
     embedding_paths = sorted(embedding_paths, key=lambda x: int(x.split('/')[-1].split(f'{embedding_args.prefix}')[-1].split('.pkl')[0]))  # must sort based on the integer number
     embedding_paths = embedding_paths[shard_start:shard_start+num_files]
     embedding_paths = embedding_paths if index_args.num_subsampled_embedding_files == -1 else embedding_paths[0:index_args.num_subsampled_embedding_files]
-    print("EMBEDDINGS")
-    print(embedding_paths)
     
     index_dir_name = f"shard_{index_shard_id}"
     index_dir = os.path.join(os.path.dirname(embedding_paths[0]), f'index/{index_dir_name}')
-    # index_dir = os.path.join(os.path.dirname(embedding_paths[0]), f'index')
     
     return index_dir, embedding_paths
 
@@ -396,13 +354,6 @@ def index_encoded_data(index, embedding_paths, indexing_batch_size):
 def build_dense_index(cfg):
     index_args = cfg.datastore.index
     embedding_args = cfg.datastore.embedding
-
-    # if isinstance(index_args.index_shard_ids[0], ListConfig):
-    #     print(f"Multi-index mode: building {len(index_args.index_shard_ids)} index for {index_args.index_shard_ids} sequentially...")
-    #     index_shard_ids_list = index_args.index_shard_ids
-    # else:
-    #     print(f"Single-index mode: building a single index over {index_args.index_shard_ids} shards...")
-    #     index_shard_ids_list = [index_args.index_shard_ids]
     
     all_embedding_paths = get_glob_flex(index_args.passages_embeddings)
     all_embedding_paths = sorted(all_embedding_paths, key=lambda x: int(x.split('/')[-1].split(f'{embedding_args.prefix}')[-1].split('.pkl')[0]))
@@ -431,81 +382,15 @@ def build_dense_index(cfg):
             if index_args.save_or_load_index:
                 index.serialize(index_dir)
 
-    # index_args = cfg.datastore.index
-    # for index_shard in index_shards:
-    #     index = Indexer(index_args.projection_size, index_args.n_subquantizers, index_args.n_bits)
-
-    #     index_dir, embedding_paths = get_index_dir_and_passage_paths(cfg)
-    #     logging.info(f"Indexing for passages: {embedding_paths}")
-        
-    #     # if "s3://" in index_dir:
-    #     #     if index_args.get("tmp_dir",None):
-    #     #         tmp_dir_path = Path(os.path.join(index_args.tmp_dir,"tmp"))
-    #     #     else:
-    #     #         tmp_dir_path = Path(os.path.join("tmp"))
-    #     #     tmp_dir_path.mkdir(parents=True, exist_ok=True)
-    #     # else:
-    #     #     os.makedirs(index_dir, exist_ok=True)
-    #     #     tmp_dir_path = None
-    #     os.makedirs(index_dir, exist_ok=True)
-    #     index_path = os.path.join(index_dir, f"index.faiss")
-    #     if index_args.save_or_load_index and os.path.exists(index_path) and not index_args.overwrite:
-    #         index.deserialize_from(index_dir)
-    #         pass
-    #     else:
-    #         print(f"Indexing passages from files {embedding_paths}")
-    #         start_time_indexing = time.time()
-    #         # index encoded embeddings
-    #         index_encoded_data(index, embedding_paths, index_args.indexing_batch_size)
-    #         print(f"Indexing time: {time.time()-start_time_indexing:.1f} s.")
-    #         if index_args.save_or_load_index:
-    #             index.serialize(index_dir,tmp_path = tmp_dir_path)
-    # if "s3://" in index_dir:
-    #     shutil.rmtree(tmp_dir_path)
-    
-    # if isinstance(index_args.index_shard_ids[0], ListConfig):
-    #     print(f"Multi-index mode: building {len(index_args.index_shard_ids)} index for {index_args.index_shard_ids} sequentially...")
-    #     index_shard_ids_list = index_args.index_shard_ids
-    # else:
-    #     print(f"Single-index mode: building a single index over {index_args.index_shard_ids} shards...")
-    #     index_shard_ids_list = [index_args.index_shard_ids]
-    
-    # for i,index_shard_ids in enumerate(index_shard_ids_list):
-    #     # todo: support PQIVF
-    #     index = Indexer(index_args.projection_size, index_args.n_subquantizers, index_args.n_bits)
-
-    #     index_dir, embedding_paths = get_index_dir_and_passage_paths(cfg, i, index_shard_ids)
-    #     logging.info(f"Indexing for passages: {embedding_paths}")
-        
-    #     os.makedirs(index_dir, exist_ok=True)
-    #     index_path = os.path.join(index_dir, f"index.faiss")
-    #     if index_args.save_or_load_index and os.path.exists(index_path) and not index_args.overwrite:
-    #         index.deserialize_from(index_dir)
-    #         pass
-    #     else:
-    #         print(f"Indexing passages from files {embedding_paths}")
-    #         start_time_indexing = time.time()
-    #         # index encoded embeddings
-    #         index_encoded_data(index, embedding_paths, index_args.indexing_batch_size)
-    #         print(f"Indexing time: {time.time()-start_time_indexing:.1f} s.")
-    #         if index_args.save_or_load_index:
-    #             index.serialize(index_dir)
 
 
 def get_index_passages_and_id_map(cfg, psg_paths):
     index_args = cfg.datastore.index
     embedding_args = cfg.datastore.embedding
 
-    # index_shard_ids = index_shard_ids if index_shard_ids else index_args.get('index_shard_ids', None)
-    # assert index_shard_ids is not None
-    
-    # index_shard_ids = [int(i) for i in index_shard_ids]
-
     passages = []
     passage_id_map = {}
     offset = 0
-    # psg_paths = get_glob_flex(os.path.join(embedding_args.passages_dir,"*.pkl"))
-    # psg_paths = sorted(psg_paths, key=lambda x: x.split('/')[-1].split(f'{embedding_args.prefix}_')[-1].split('.pkl')[0])
     for psg_filepath in psg_paths:
             print(psg_filepath)
             shard_passages = fast_load_jsonl(psg_filepath)
@@ -514,23 +399,6 @@ def get_index_passages_and_id_map(cfg, psg_paths):
             offset += len(shard_passages)
             passages.extend(shard_passages)
             passage_id_map = {**passage_id_map, **shard_id_map}
-    # if index_shard_ids == [-1]:
-    #     for psg_filename in os.listdir(cfg.datastore.embedding.passages_dir):
-    #         print(psg_filename)
-    #         shard_passages = fast_load_jsonl(os.path.join(cfg.datastore.embedding.passages_dir,psg_filename))
-    #         shard_id_map = {str(x["id"]+offset): x for x in shard_passages}
-            
-    #         offset += len(shard_passages)
-    #         passages.extend(shard_passages)
-    #         passage_id_map = {**passage_id_map, **shard_id_map}
-    # else:
-    #     for shard_id in index_shard_ids:
-    #         shard_passages = fast_load_jsonl_shard(cfg.datastore.embedding, None, rank, shard_id)
-    #         shard_id_map = {str(x["id"]+offset): x for x in shard_passages}
-            
-    #         offset += len(shard_passages)
-    #         passages.extend(shard_passages)
-    #         passage_id_map = {**passage_id_map, **shard_id_map}
         
     return passages, passage_id_map
 

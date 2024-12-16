@@ -110,16 +110,7 @@ def get_sharded_passages(args, all_passages):
     return passages
 
 def get_shard_specs(args, file_paths, file_sizes):
-    # file_sizes = []
-    # if "s3://" in args.raw_data_path:
-    #     for obj in source_files:
-    #         file_sizes.append(obj["Size"])
-    # else:
-    #     for file_path in source_files:
-    #         file_sizes.append(os.path.getsize(file_path))
     total_size = sum(file_sizes)
-    print("SIZE")
-    print(total_size)
 
     if args.get("max_shard_size",None):
         shard_size = args.max_shard_size
@@ -135,7 +126,6 @@ def get_file_paths_and_sizes(args):
         client = boto3.client('s3')
         m = re.match("s3://([^/]+)/(.*)",args.raw_data_path)
         bucket, filedir = m.groups()[0],m.groups()[1]
-        # filedir = f"pretraining-data/sources/reddit/dolma_raw/merged_versions/merged_qa_all_wsubreddit/{subdir}/"
         paginator = client.get_paginator('list_objects_v2')
         pages = paginator.paginate(Bucket=bucket, Prefix=filedir)
 
@@ -144,29 +134,21 @@ def get_file_paths_and_sizes(args):
         for page in pages:
             for obj in page["Contents"]:
                 okey = obj["Key"]
-                print(okey)
                 if "json" not in okey:
                     continue
                 filepath = f"s3://{bucket}/{okey}"
                 file_paths.append(filepath)
-                # if ".gz" in okey:
-                #     s3 = boto3.resource("s3")
-                #     getobj = s3.Object(bucket, okey)
-                #     with gzip.GzipFile(fileobj=getobj.get()["Body"]) as gzipfile:
-                #         file_sizes.append(gzipfile.seek(0,2))
-                # else:
-                #     file_sizes.append(obj["Size"])
+                file_sizes.append(obj["Size"])
 
     else:
         for file in os.listdir(args.raw_data_path):
             file_paths.append(os.path.join(args.raw_data_path, file))
-            # file_sizes.append(os.path.getsize(file_path))
+            file_sizes.append(os.path.getsize(file_path))
 
     return file_paths,file_sizes
 
 def get_file_partitions(args):
-    file_paths,file_sizes = get_file_paths_and_sizes(args)
-    print(file_paths)
+    file_paths,_ = get_file_paths_and_sizes(args)
 
     rank = int(os.environ.get("BEAKER_REPLICA_RANK"))
     world_size = int(os.environ.get("BEAKER_REPLICA_COUNT"))
@@ -175,12 +157,11 @@ def get_file_partitions(args):
     start_idx = int(rank * files_per_process)
     end_idx = int((rank + 1) * files_per_process) if rank < world_size - 1 else len(file_paths)
     partition_file_paths = file_paths[start_idx:end_idx]
-    partition_file_sizes = file_sizes[start_idx:end_idx]
-    # partition_destination_paths = destination_paths[start_idx:end_idx]
+    # partition_file_sizes = file_sizes[start_idx:end_idx]
 
     print(f"This worker (rank {rank}) handling files:\n {partition_file_paths[0]}\n to\n {partition_file_paths[-1]}")
 
-    return partition_file_paths,partition_file_sizes,rank
+    return partition_file_paths,rank
 
 
 def generate_passage_embeddings(cfg):
@@ -213,35 +194,11 @@ def generate_passage_embeddings(cfg):
         if not args.no_fp16:
             model = model.half()
         
-        # if os.path.isdir(args.raw_data_path):
-        #     source_paths = [os.path.join(args.raw_data_path, file) for file in os.listdir(args.raw_data_path)]
-        # else:
-        #     source_paths = [args.raw_data_path]
 
-        # file_list = get_file_list(args)
-        # print(file_list)
-
-        # rank = int(os.environ.get("BEAKER_REPLICA_RANK"))
-        # world_size = int(os.environ.get("BEAKER_REPLICA_COUNT"))
-        # # Distribute files across processes
-        # files_per_process = len(file_list) / world_size
-        # start_idx = int(rank * files_per_process)
-        # end_idx = int((rank + 1) * files_per_process) if rank < world_size - 1 else len(file_list)
-        # partition_file_list = file_list[start_idx:end_idx]
-        # # partition_destination_paths = destination_paths[start_idx:end_idx]
-
-        # print(f"This worker (rank {rank}) handling files:\n {partition_source_paths[0]}\n to\n {partition_source_paths[-1]}")
-
-        # num_shards,shard_size = get_shard_specs(args, partition_file_list)
-        partition_file_paths,partition_file_sizes,rank = get_file_partitions(args)
+        partition_file_paths,rank = get_file_partitions(args)
         # num_shards,shard_size = get_shard_specs(args, partition_file_paths,partition_file_sizes)
 
-        # shard_ids = [int(i) for i in args.shard_ids]
 
-        #TODO
-        #for simplicity maybe just
-        #num_shards = len(source_paths)/2
-        #shard_ids = range(num_shards)
         num_files = args.max_files_per_shard if args.get("max_files_per_shard",None) else len(partition_file_paths)
         start_list = range(0,len(partition_file_paths),num_files)
         num_shards = len(start_list)
@@ -253,15 +210,12 @@ def generate_passage_embeddings(cfg):
                 print(f"Embeddings exist in {embedding_shard_save_path}")
                 continue
             
-            shard_passages = fast_load_jsonl_shard_full_files(args, partition_file_paths, partition_file_sizes, rank, shard_id, shard_start, num_files, num_shards)
+            shard_passages = fast_load_jsonl_shard_full_files(args, partition_file_paths, rank, shard_id, shard_start, num_files, num_shards)
             if args.get("logloc",None):
                 logpath = Path(args.logloc)
                 logpath.mkdir(parents=True, exist_ok=True)
                 with open(os.path.join(args.logloc,f"{rank}_{shard_id:02d}.json"),"w") as logout:
                     logout.write(json.dumps(shard_passages,indent=4))
-                    # logout.write(f"\n\nSHARD {shard_id}\n\n")
-                    # logout.write(shard_passages[0] + "\n")
-                    # logout.write(shard_passages[-1] + "\n")
 
             allids, allembeddings = embed_passages(args, shard_passages, model, tokenizer)
 
