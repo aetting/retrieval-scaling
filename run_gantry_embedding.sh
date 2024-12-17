@@ -12,7 +12,7 @@ export BEAKER_EXPERIMENT_NAME="Contriever-mergedqa-prefilter"
 
 gantry run \
     --task-name "Contriever-mergedqa-prefilter" \
-    --description "Embed docs for dense retrieval" \
+    --description "Embed full reddit docs for dense retrieval" \
     --allow-dirty \
     --workspace ai2/reddit \
     --beaker-image 'petew/olmo-torch23-gantry' \
@@ -23,7 +23,7 @@ gantry run \
     --priority "${PRIORITY}" \
     --leader-selection \
     --gpus 1 \
-    --replicas 5 \
+    --replicas 8 \
     --preemptible \
     --cluster "${CLUSTER}" \
     --budget ai2/oe-data \
