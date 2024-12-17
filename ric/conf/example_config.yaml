@@ -70,14 +70,14 @@ datastore:
     n_subquantizers: 0    # Number of subquantizer used for vector quantization, if 0 flat index is used
     n_bits: 64    # Number of bits per subquantizer
     overwrite: true
-    max_files_per_index_shard: 3
+    max_files_per_index_shard: 6
     # tmp_dir: /output
 
 
 evaluation:
   domain: mmlu
   search:
-    n_docs: 3
+    n_docs: 5
     per_gpu_batch_size: 64    # Batch size for query encoding
     question_maxlength: 512    # Maximum number of tokens in a question
     lowercase: False
