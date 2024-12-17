@@ -362,11 +362,13 @@ def build_dense_index(cfg):
     index_args = cfg.datastore.index
     embedding_args = cfg.datastore.embedding
     
+    print("Getting embedding paths")
     all_embedding_paths = get_glob_flex(index_args.passages_embeddings)
     all_embedding_paths = sorted(all_embedding_paths, key=lambda x: int(x.split('/')[-1].split(f'{embedding_args.prefix}')[-1].split('.pkl')[0]))
     num_files = index_args.max_files_per_index_shard if index_args.get("max_files_per_index_shard",None) else len(all_embedding_paths)
     start_list = range(0,len(all_embedding_paths),num_files)
     for index_shard_id, shard_start in enumerate(start_list):
+        print(f"Starting shard {index_shard_id}")
         # todo: support PQIVF
         index = Indexer(index_args.projection_size, index_args.n_subquantizers, index_args.n_bits)
 
@@ -375,9 +377,11 @@ def build_dense_index(cfg):
         # index_dir = get_index_dir_and_passage_paths(cfg, index_shard_id, embedding_paths)
         logging.info(f"Indexing in shard {index_shard_id} for passages: {embedding_paths}")
         
+        print(f"Starting indexing {index_shard_id}")
         os.makedirs(index_dir, exist_ok=True)
         index_path = os.path.join(index_dir, f"index.faiss")
         if index_args.save_or_load_index and os.path.exists(index_path) and not index_args.overwrite:
+            print(f"Loading existing shard {index_shard_id}")
             index.deserialize_from(index_dir)
             pass
         else:
