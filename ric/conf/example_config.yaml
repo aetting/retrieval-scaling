@@ -30,7 +30,7 @@ datastore:
   embedding:
     raw_data_path: ${datastore.raw_data_path}
     # output_dir: /net/nfs.cirrascale/allennlp/allysone/reddit/scaling_out_mini
-    output_dir: /data/allysone/reddit/dense-retrieval/scaling_out_medium
+    output_dir: /data/allysone/reddit/dense-retrieval/scaling_out_medium2
     # output_dir: s3://ai2-llm/pretraining-data/sources/reddit/dolma_raw/merged_versions/scaling_out_mini
     # num_shards: 4
     chunk_size: ${datastore.chunk_size}

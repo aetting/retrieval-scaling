@@ -8,10 +8,10 @@
 CLUSTER="ai2/jupiter*"
 PRIORITY="high"
 
-export BEAKER_EXPERIMENT_NAME="Contriever-mergedqa-prefilter-sample"
+export BEAKER_EXPERIMENT_NAME="Contriever-mergedqa-prefilter"
 
 gantry run \
-    --task-name "Contriever-mergedqa-prefilter-sample" \
+    --task-name "Contriever-mergedqa-prefilter" \
     --description "Embed docs for dense retrieval" \
     --allow-dirty \
     --workspace ai2/reddit \
@@ -23,7 +23,7 @@ gantry run \
     --priority "${PRIORITY}" \
     --leader-selection \
     --gpus 1 \
-    --replicas 4 \
+    --replicas 5 \
     --preemptible \
     --cluster "${CLUSTER}" \
     --budget ai2/oe-data \
