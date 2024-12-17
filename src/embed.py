@@ -30,7 +30,7 @@ import contriever.src.normalize_text
 from src.data import fast_load_jsonl_shard, fast_load_jsonl_shard_full_files
 
 
-def embed_passages(args, passages, model, tokenizer):
+def embed_passages(args, passages, model, tokenizer, shard_id, num_shards):
     if "sentence-transformers" in args.model_name_or_path:
         allids, alltext = [], []
         for k, p in tqdm(enumerate(passages)):
@@ -52,6 +52,7 @@ def embed_passages(args, passages, model, tokenizer):
         total = 0
         allids, allembeddings = [], []
         batch_ids, batch_text = [], []
+        tot_psgs = len(passages)
         with torch.no_grad():
             for k, p in tqdm(enumerate(passages)):
                 batch_ids.append(p["id"])
@@ -65,7 +66,7 @@ def embed_passages(args, passages, model, tokenizer):
                     text = contriever.src.normalize_text.normalize(text)
                 batch_text.append(text)
 
-                if len(batch_text) == args.per_gpu_batch_size or k == len(passages) - 1:
+                if len(batch_text) == args.per_gpu_batch_size or k == tot_psgs - 1:
 
                     encoded_batch = tokenizer.batch_encode_plus(
                         batch_text,
@@ -75,6 +76,7 @@ def embed_passages(args, passages, model, tokenizer):
                         truncation=True,
                     )
 
+                    print(f"EMBEDDING UP TO PSG {k} out of {tot_psgs} (in shard {shard_id} of {num_shards})")
                     encoded_batch = {k: v.cuda() for k, v in encoded_batch.items()}
                     embeddings = model(**encoded_batch)  # shape: (per_gpu_batch_size, hidden_size)
                     if "contriever" not in args.model_name_or_path:
@@ -218,7 +220,7 @@ def generate_passage_embeddings(cfg):
                 with open(os.path.join(args.logloc,f"{rank}_{shard_id:02d}.json"),"w") as logout:
                     logout.write(json.dumps(shard_passages,indent=4))
 
-            allids, allembeddings = embed_passages(args, shard_passages, model, tokenizer)
+            allids, allembeddings = embed_passages(args, shard_passages, model, tokenizer, shard_id, num_shards)
 
             os.makedirs(args.embedding_dir, exist_ok=True)
             print(f"Saving {len(allids)} passage embeddings to {embedding_shard_save_path}.")
