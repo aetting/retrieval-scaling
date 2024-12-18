@@ -832,11 +832,27 @@ def safe_write_jsonl(data, output_file):
     #         os.remove(output_file)
     #         print(f"File '{output_file}' has been deleted due to an error.")
 
+def partition_input_filepaths(file_paths):
+
+    rank = int(os.environ.get("BEAKER_REPLICA_RANK"))
+    world_size = int(os.environ.get("BEAKER_REPLICA_COUNT"))
+    # Distribute files across processes
+    files_per_process = len(file_paths) / world_size
+    start_idx = int(rank * files_per_process)
+    end_idx = int((rank + 1) * files_per_process) if rank < world_size - 1 else len(file_paths)
+    partition_file_paths = file_paths[start_idx:end_idx]
+    # partition_file_sizes = file_sizes[start_idx:end_idx]
+
+    print(f"This worker (rank {rank}) handling files:\n {partition_file_paths}")
+
+    return partition_file_paths
 
 def search_topk(cfg):
     if cfg.model.get("sparse_retriever", None):
         search_sparse_topk(cfg)
     else:
-        for query_file in get_glob_flex(cfg.evaluation.data.eval_data):
+        all_query_files = get_glob_flex(cfg.evaluation.data.eval_data)
+        partitioned_files = partition_input_filepaths(all_query_files)
+        for query_file in partitioned_files:
             print(f"\nSearching on queries in {query_file}")
             search_dense_topk(cfg,query_file)
