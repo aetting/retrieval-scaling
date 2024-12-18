@@ -264,7 +264,8 @@ def search_dense_topk(cfg, query_filepath):
 
         
         all_psg_paths = get_glob_flex(os.path.join(embedding_args.passages_dir,"*.pkl"))
-        all_psg_paths = sorted(all_psg_paths, key=lambda x: int(re.match(".*raw_passages_(.*)-of-",x).groups()[0].replace("-","")))
+        ptrn = ".*raw_passages_(.*)-(.*)-of-"
+        all_psg_paths = sorted(all_psg_paths, key=lambda x: (int(re.match(ptrn,x).group(1)),int(re.match(ptrn,x).group(2))))
         num_files = index_args.max_files_per_index_shard if index_args.get("max_files_per_index_shard",None) else len(all_psg_paths)
         start_list = range(0,len(all_psg_paths),num_files)
         for index_shard_id, shard_start in enumerate(start_list):
