@@ -8,11 +8,11 @@
 CLUSTER="ai2/jupiter*"
 PRIORITY="high"
 
-export BEAKER_EXPERIMENT_NAME="Contriever-mergedqa-prefilter-sample"
+export BEAKER_EXPERIMENT_NAME="Contriever-mergedqa-prefilter-search"
 
 gantry run \
-    --task-name "Contriever-mergedqa-prefilter-sample" \
-    --description "Embed docs for dense retrieval" \
+    --task-name "Contriever-mergedqa-prefilter-search" \
+    --description "Search full reddit dense retrieval" \
     --allow-dirty \
     --workspace ai2/reddit \
     --beaker-image 'petew/olmo-torch23-gantry' \
