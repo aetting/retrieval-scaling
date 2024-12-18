@@ -71,7 +71,7 @@ datastore:
     n_subquantizers: 0    # Number of subquantizer used for vector quantization, if 0 flat index is used
     n_bits: 64    # Number of bits per subquantizer
     overwrite: true
-    max_files_per_index_shard: 3
+    max_files_per_index_shard: 2
     # tmp_dir: /output
 
 
@@ -97,7 +97,7 @@ evaluation:
   data:
     # eval_data: "/net/nfs.cirrascale/allennlp/allysone/reddit/mmlu/mmlu_queries/test_queries/mmlu_queries_corr/global_facts_test.jsonl"
     # eval_data: "s3://ai2-llm/pretraining-data/sources/reddit/dolma_raw/mmlu_queries/test_queries/mmlu_queries_corr/global_facts_test.jsonl"
-    eval_data: s3://ai2-llm/pretraining-data/sources/reddit/dolma_raw/mmlu_queries/*.jsonl
+    eval_data: s3://ai2-llm/pretraining-data/sources/reddit/dolma_raw/mmlu_queries/test_queries/mmlu_queries_corr/*.jsonl
     max_eval_data_seq_length: 1024
     eval_stride: 512
     merge: True
