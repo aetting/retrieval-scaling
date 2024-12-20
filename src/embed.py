@@ -136,7 +136,7 @@ def get_file_paths_and_sizes(args):
         for page in pages:
             for obj in page["Contents"]:
                 okey = obj["Key"]
-                if "json" not in okey:
+                if ".json" not in okey.split("/")[-1]:
                     continue
                 filepath = f"s3://{bucket}/{okey}"
                 file_paths.append(filepath)
