@@ -1,20 +1,14 @@
-# # Generate a hash for the run name by combining model name and documents
-# RUN_HASH=$(echo -n "${MODEL_NAME}${DOCUMENTS}" | md5sum | awk '{print $1}')
-# RUN_NAME="nvidia_deberta_${RUN_HASH:0:8}"
-
-# # Set the run name as an environment variable
-# export BEAKER_EXPERIMENT_NAME="${RUN_NAME}"
 
 CLUSTER="ai2/jupiter*"
 PRIORITY="high"
 
-export BEAKER_EXPERIMENT_NAME="Contriever-mergedqa-prefilter-index-search"
+export BEAKER_EXPERIMENT_NAME="Contriever-index-search"
 
 gantry run \
-    --task-name "Contriever-mergedqa-prefilter-index-search" \
-    --description "Indexing and search full reddit dense retrieval" \
+    --task-name "Contriever-index-search" \
+    --description "Indexing and search for dense retrieval" \
     --allow-dirty \
-    --workspace ai2/reddit \
+    --workspace ai2/oe-data \
     --beaker-image 'petew/olmo-torch23-gantry' \
     --timeout -1 \
     --show-logs \
