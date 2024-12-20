@@ -24,17 +24,47 @@ This codebase contains:
 ## Installation
 Clone repo and checkout `reddit-exps` branch.
 
+Note from original repo (I didn't try this, though it may be installed on the image we're using): *to accelerate the inference, we recommend users to install flash attention based on their accelerator type following the instructions [here](https://github.com/Dao-AILab/flash-attention).*
+
+## Gantry scripts
 There are three scripts for running embedding, indexing, and search via gantry.
 
 Embedding: `run_gantry_embedding.sh`. 
-This is the first place where we distribute across GPUs, to accelerate the embedding process. Current set up assumes 1 GPU per replica, so **keep the setting of --gpus 1**. To increase parallelization, increase `--replicas`.
+This is the first place where we distribute across GPUs, to accelerate the embedding process. Current set up assumes 1 GPU per replica, so **keep the setting of --gpus 1**. To increase parallelization, increase `--replicas`. Note that the parallelization works by partitioning input files across replicas, so this won't be effective if you have very few input files.
 ```
 --gpus 1 \
---replicas 8
+--replicas 8 \
 ``` 
 
-Indexing
-Note: to accelerate the inference, we recommend users to install flash attention based on their accelerator type following the instructions [here](https://github.com/Dao-AILab/flash-attention).
+Indexing: `run_gantry_index.sh`.
+Not currently set up to distribute across GPUs, so keep as below.
+```
+--gpus 1 \
+--replicas 1 \
+```
+
+Search: `run_gantry_search.sh`.
+Was not originally planning to parallelize this step, but I had a large number of files with queries (57 files corresponding to MMLU categories) so I ended up modifying the code to partition those query files across replicas to speed things up. In the current example I use 24 replicas. 
+```
+--gpus 1 \
+--replicas 24 \
+```
+## Config
+
+Example config file `example_config.yaml` can be found in `ric/conf/`. That is the config the current gantry scripts are pointing to.
+
+Settings that need to be filled in:
+
+`datastore.raw_data_path`: This is should be a directory containing the data to be embedded/indexed/searched. Assumes json/jsonl files with a json dict object per line, containing "text" field with the text to be embedded. Should work for directories on S3 or local, and should work for .gz files. (Not currently set up for glob inputs.)
+`datastore.embedding.output_dir`: This is the top-level location where all outputs (embeddings, passages, index, retrieval outputs) will be written.
+
+Other things to note:
+
+`datastore.embedding.max_files_per_shard`: Max number of input files to be included in an embedding file shard. I had very large files so I set this to 1.
+`datastore.embedding.fields_to_add`: Other fields in the input jsons that you want saved with the passages (other than "text"). I used this to keep the "subreddit" field.
+`datastore.index.max_files_per_index_shard`: Max number of embeddings files per index shard. 
+`evaluation.data.eval_data`: This expects a path to the query file/files, in glob format.
+`tasks.eval.task_name`: This affects how the query data is processed. For now I've sidestepped what the original code did, and just defined a "gen" setting that uses the input query text raw as the search query.
 
 
 
