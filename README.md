@@ -55,14 +55,14 @@ Example config file `example_config.yaml` can be found in `ric/conf/`. That is t
 
 Settings that need to be filled in:
 
-- `datastore.raw_data_path`: This is should be a directory containing the data to be embedded/indexed/searched. Assumes json/jsonl files with a json dict object per line, containing "text" field with the text to be embedded. Should work for directories on S3 or local, and should work for .gz files. (Not currently set up for glob inputs.)
+- `datastore.raw_data_path`: This should be a directory containing the data to be embedded/indexed/searched. Assumes json/jsonl files with a json dict object per line, containing "text" field with the text to be embedded. Should work for directories on S3 or local, and should work for .gz files. (Not currently set up for glob inputs.)
 - `datastore.embedding.output_dir`: This is the top-level location where all outputs (embeddings, passages, index, retrieval outputs) will be written.
 
 Other things to note:
 
 - `datastore.embedding.max_files_per_shard`: Max number of input files to be included in an embedding file shard. I had very large files so I set this to 1.
 - `datastore.embedding.fields_to_add`: Other fields in the input jsons that you want saved with the passages (other than "text"). I used this to keep the "subreddit" field.
-- `datastore.index.max_files_per_index_shard`: Max number of embeddings files per index shard. 
+- `datastore.index.max_files_per_index_shard`: Max number of embedding files per index shard. 
 - `evaluation.data.eval_data`: This expects a path to the query file/files, in glob format.
 - `tasks.eval.task_name`: This affects how the query data is processed. For now I've sidestepped what the original code did, and just defined a "gen" setting that uses the input query text raw as the search query.
 
