@@ -2,11 +2,11 @@
 CLUSTER="ai2/jupiter*"
 PRIORITY="high"
 
-export BEAKER_EXPERIMENT_NAME="Contriever-index-search"
+export BEAKER_EXPERIMENT_NAME="Contriever-index"
 
 gantry run \
-    --task-name "Contriever-index-search" \
-    --description "Indexing and search for dense retrieval" \
+    --task-name "Contriever-index" \
+    --description "Indexing for dense retrieval" \
     --allow-dirty \
     --workspace ai2/oe-data \
     --beaker-image 'petew/olmo-torch23-gantry' \
@@ -30,4 +30,4 @@ gantry run \
     --shared-memory 10GiB \
     --weka oe-data-default:/data \
     --yes \
-    -- python -m ric.main_ric --config-name example_config tasks.datastore.index=true tasks.eval.search=true
+    -- python -m ric.main_ric --config-name example_config tasks.datastore.index=true
