@@ -22,22 +22,15 @@ model:
 
 datastore:
   domain: reddit
-  # raw_data_path: raw_data/fineweb-edu-1m.jsonl  # pass a single jsonl file or a dir of jsonl files
-  # raw_data_path: /net/nfs.cirrascale/allennlp/allysone/reddit/mini_samples  # pass a single jsonl file or a dir of jsonl files
-  # raw_data_path: s3://ai2-llm/pretraining-data/sources/reddit/dolma_raw/merged_versions/merged_medium
   raw_data_path: s3://ai2-llm/pretraining-data/sources/reddit/dolma_raw/merged_versions/merged_qa_wsubreddit/merged_qa_prefilter
   chunk_size: 256  # chunk size in number of words
   
   embedding:
     raw_data_path: ${datastore.raw_data_path}
-    # output_dir: /net/nfs.cirrascale/allennlp/allysone/reddit/scaling_out_mini
     output_dir: /data/allysone/reddit/dense-retrieval/merged_qa_prefilter_dr_output
-    # output_dir: s3://ai2-llm/pretraining-data/sources/reddit/dolma_raw/merged_versions/scaling_out_mini
-    # num_shards: 4
     chunk_size: ${datastore.chunk_size}
     keep_last_chunk: true
     passages_dir: ${datastore.embedding.output_dir}/passages/${datastore.domain}
-    # max_shard_size: 1000000000
     max_files_per_shard: 1
 
     per_gpu_batch_size: 512
@@ -49,11 +42,10 @@ datastore:
     lowercase: False
     normalize_text: False
     fields_to_add: ["subreddit"]
-    # logloc: output
+    # logloc: output #was using this to write passages to a log for sanity checking / debugging
 
 
     prefix: "passages"
-    # embedding_dir: /net/nfs.cirrascale/allennlp/allysone/reddit/scaling_out_mini/embeddings/${model.datastore_encoder}/${datastore.domain}
     embedding_dir: ${datastore.embedding.output_dir}/embeddings/${model.datastore_encoder}/${datastore.domain}
     use_saved_if_exists: false
 
@@ -62,7 +54,6 @@ datastore:
     chunk_size: ${datastore.chunk_size}
     passages_embeddings: ${datastore.embedding.embedding_dir}/*.pkl
     num_subsampled_embedding_files: -1    # Number of subsampled embeddings, use all if pass -1, not supported yet, assume use all embeddings in the dir
-    # index_shard_ids: [-1]  # idx of passages included in each index; [0, 1, 2] means build a single index over psg-0&1&2; [[0], [1,2]] means build 1 index for psg-0 and 1 index for psg-1&2.
     save_or_load_index: True
     no_fp16: False
     index_type: PQ    # PQ, PQIVF (PQ degrades to flat when n_subquantizers is 0)
@@ -72,7 +63,6 @@ datastore:
     n_bits: 64    # Number of bits per subquantizer
     overwrite: true
     max_files_per_index_shard: 2
-    # tmp_dir: /output
 
 
 evaluation:
@@ -95,8 +85,6 @@ evaluation:
     rerank_n_docs: null  # number of documents used for reranking, set to null if not removing any data
     use_saved_dedup_data: false  # reuse the saved dedupped data for efficient subsampling
   data:
-    # eval_data: "/net/nfs.cirrascale/allennlp/allysone/reddit/mmlu/mmlu_queries/test_queries/mmlu_queries_corr/global_facts_test.jsonl"
-    # eval_data: "s3://ai2-llm/pretraining-data/sources/reddit/dolma_raw/mmlu_queries/test_queries/mmlu_queries_corr/global_facts_test.jsonl"
     eval_data: s3://ai2-llm/pretraining-data/sources/reddit/dolma_raw/mmlu_queries/test_queries/mmlu_queries_corr/*.jsonl
     max_eval_data_seq_length: 1024
     eval_stride: 512
