@@ -56,7 +56,7 @@ Example config file `example_config.yaml` can be found in `ric/conf/`. That is t
 Settings that need to be filled in:
 
 - `datastore.raw_data_path`: This should be a directory containing the data to be embedded/indexed/searched. Assumes json/jsonl files with a json dict object per line, containing "text" field with the text to be embedded. Should work for directories on S3 or local, and should work for .gz files. (Not currently set up for glob inputs.)
-- `datastore.embedding.output_dir`: This is the top-level location where all outputs (embeddings, passages, index, retrieval outputs) will be written.
+- `datastore.embedding.output_dir`: This is the top-level location where all outputs (embeddings, passages, index, retrieval outputs) will be written. The gantry scripts mount WEKA (oe-data-default) to /data and I've been writing the outputs there. (S3 ended up causing problems as a location for the index in particular.)
 
 Other things to note:
 
